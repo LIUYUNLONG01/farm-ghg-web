@@ -14,11 +14,18 @@ import {
   loadProjectDraft,
   saveEntericDraft,
 } from "@/lib/utils/projectDraftStorage";
-import type { EntericRecord, LivestockRecord } from "@/types/ghg";
+import { buildEntericDefaultsForLivestock } from "@/lib/utils/standardFactors";
+import type {
+  EntericRecord,
+  LivestockRecord,
+  StandardVersion,
+} from "@/types/ghg";
 
 export default function EntericPage() {
   const [statusMessage, setStatusMessage] = useState("");
   const [projectName, setProjectName] = useState("");
+  const [standardVersion, setStandardVersion] =
+    useState<StandardVersion>("NYT4243_2022");
   const [livestockRows, setLivestockRows] = useState<LivestockRecord[]>([]);
 
   const {
@@ -41,6 +48,7 @@ export default function EntericPage() {
     if (!draft) return;
 
     setProjectName(draft.base.enterpriseName || "未命名项目");
+    setStandardVersion(draft.base.standardVersion);
     setLivestockRows(draft.livestock ?? []);
 
     if (draft.enteric && draft.enteric.length > 0) {
@@ -60,15 +68,19 @@ export default function EntericPage() {
 
     if (draft.livestock && draft.livestock.length > 0) {
       reset({
-        rows: draft.livestock.map((row, index) => ({
-          sourceLivestockIndex: index,
+        rows: buildEntericDefaultsForLivestock(
+          draft.base.standardVersion,
+          draft.livestock
+        ).map((row) => ({
+          sourceLivestockIndex: row.sourceLivestockIndex,
           species: row.species,
           stage: row.stage,
-          method: "defaultEF",
-          emissionFactor: 0,
-          notes: "",
+          method: row.method,
+          emissionFactor: row.emissionFactor,
+          notes: row.notes ?? "",
         })),
       });
+      setStatusMessage("已按标准版本自动带入可匹配的默认因子；未匹配项请手动填写。");
     }
   }, [reset]);
 
@@ -99,6 +111,29 @@ export default function EntericPage() {
   const readonlyClass =
     "w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-700";
   const errorClass = "mt-2 text-sm text-red-600";
+
+  const applyDefaults = () => {
+    const draft = loadProjectDraft();
+    if (!draft) return;
+
+    const defaultRows = buildEntericDefaultsForLivestock(
+      draft.base.standardVersion,
+      livestockRows
+    );
+
+    reset({
+      rows: defaultRows.map((row) => ({
+        sourceLivestockIndex: row.sourceLivestockIndex,
+        species: row.species,
+        stage: row.stage,
+        method: row.method,
+        emissionFactor: row.emissionFactor,
+        notes: row.notes ?? "",
+      })),
+    });
+
+    setStatusMessage("已按当前标准版本重新带入默认因子。");
+  };
 
   const onSubmit = (values: EntericCH4FormValues) => {
     const rows: EntericRecord[] = values.rows.map((row) => ({
@@ -154,7 +189,7 @@ export default function EntericPage() {
               肠道发酵 CH4
             </h1>
             <p className="mt-3 text-sm leading-7 text-slate-600">
-              当前项目：{projectName || "未命名项目"}
+              当前项目：{projectName || "未命名项目"} · 标准版本：{standardVersion}
             </p>
           </div>
 
@@ -176,10 +211,22 @@ export default function EntericPage() {
 
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">1. 因子录入</h2>
-            <p className="mt-2 text-sm text-slate-600">
-              这一页先手动录入肠道发酵排放因子。即使选择“默认推荐值”，当前版本也先手工填写，下一步再接标准参数库。
-            </p>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">1. 因子录入</h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  当前支持按标准版本自动带入可匹配的默认因子。带入后你仍然可以继续手动修改。
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={applyDefaults}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              >
+                按标准重新带入默认值
+              </button>
+            </div>
 
             <div className="mt-6 space-y-6">
               {watchedRows?.map((_, index) => {

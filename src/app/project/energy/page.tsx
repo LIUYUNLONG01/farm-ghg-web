@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 
 import { calcEnergyBalance } from "@/lib/calculators/energyBalance";
 import { calcFossilFuel } from "@/lib/calculators/fossilFuel";
+import { fuelPresetLibrary, buildFuelRowFromPreset } from "@/lib/utils/standardFactors";
 import {
   energyModuleSchema,
   type EnergyModuleFormValues,
@@ -18,6 +19,7 @@ import {
 import type {
   EnergyBalanceRecord,
   FuelCombustionRecord,
+  StandardVersion,
 } from "@/types/ghg";
 
 function createEmptyFuelRow() {
@@ -44,6 +46,8 @@ const defaultEnergyBalance: EnergyBalanceRecord = {
 
 export default function EnergyPage() {
   const [projectName, setProjectName] = useState("");
+  const [standardVersion, setStandardVersion] =
+    useState<StandardVersion>("NYT4243_2022");
   const [statusMessage, setStatusMessage] = useState("");
 
   const {
@@ -74,6 +78,7 @@ export default function EnergyPage() {
     if (!draft) return;
 
     setProjectName(draft.base.enterpriseName || "未命名项目");
+    setStandardVersion(draft.base.standardVersion);
 
     reset({
       fuelRows:
@@ -149,6 +154,22 @@ export default function EnergyPage() {
     "w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-700";
   const errorClass = "mt-2 text-sm text-red-600";
 
+  const handleAddFuelPreset = (presetId: string) => {
+    const row = buildFuelRowFromPreset(presetId);
+    if (!row) return;
+
+    append({
+      fuelType: row.fuelType,
+      consumptionAmount: row.consumptionAmount,
+      ncvTJPerUnit: row.ncvTJPerUnit,
+      carbonContentTonCPerTJ: row.carbonContentTonCPerTJ,
+      oxidationFactor: row.oxidationFactor,
+      notes: row.notes ?? "",
+    });
+
+    setStatusMessage("已插入常见燃料模板，请继续填写消耗量。");
+  };
+
   const onSubmit = (values: EnergyModuleFormValues) => {
     const fuelRows: FuelCombustionRecord[] = values.fuelRows
       .filter((row) => row.fuelType.trim() !== "")
@@ -188,7 +209,7 @@ export default function EnergyPage() {
               能源与购入/输出电力热力
             </h1>
             <p className="mt-3 text-sm leading-7 text-slate-600">
-              当前项目：{projectName || "未命名项目"}
+              当前项目：{projectName || "未命名项目"} · 标准版本：{standardVersion}
             </p>
           </div>
 
@@ -214,7 +235,7 @@ export default function EnergyPage() {
               <div>
                 <h2 className="text-lg font-semibold">1. 化石燃料燃烧</h2>
                 <p className="mt-2 text-sm text-slate-600">
-                  当前按“消耗量 × 低位发热量 × 单位热值含碳量 × 碳氧化率 × 44/12”预览 tCO₂/yr。
+                  当前已接入“常见燃料模板”。你可以一键插入柴油、汽油、天然气、原煤的起始参数，再手动补充消耗量。
                 </p>
               </div>
 
@@ -223,8 +244,21 @@ export default function EnergyPage() {
                 onClick={() => append(createEmptyFuelRow())}
                 className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
               >
-                新增燃料行
+                新增空白燃料行
               </button>
+            </div>
+
+            <div className="mb-6 flex flex-wrap gap-3">
+              {fuelPresetLibrary.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => handleAddFuelPreset(preset.id)}
+                  className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  添加模板：{preset.label}
+                </button>
+              ))}
             </div>
 
             <div className="space-y-6">
@@ -397,6 +431,10 @@ export default function EnergyPage() {
 
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold">2. 购入/输出电力热力</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              这一版先保留手动输入。等你把标准附录中的电力/热力因子表整理好后，下一轮再做自动带入。
+            </p>
+
             <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-slate-700">
