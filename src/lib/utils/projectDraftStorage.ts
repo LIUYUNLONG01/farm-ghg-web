@@ -1,6 +1,8 @@
 import type { ProjectBaseFormValues } from "@/lib/schemas/projectBase";
 import type {
+  EnergyBalanceRecord,
   EntericRecord,
+  FuelCombustionRecord,
   LivestockRecord,
   ManureCH4Record,
   ManureN2ORecord,
@@ -25,6 +27,17 @@ function getDefaultDraft(): ProjectDraft {
     enteric: [],
     manureCH4: [],
     manureN2O: [],
+    energyFuel: [],
+    energyBalance: {
+      purchasedElectricityMWh: 0,
+      purchasedElectricityEFtCO2PerMWh: 0,
+      purchasedHeatGJ: 0,
+      purchasedHeatEFtCO2PerGJ: 0,
+      exportedElectricityMWh: 0,
+      exportedElectricityEFtCO2PerMWh: 0,
+      exportedHeatGJ: 0,
+      exportedHeatEFtCO2PerGJ: 0,
+    },
     createdAt: now,
     updatedAt: now,
   };
@@ -60,6 +73,8 @@ export function saveProjectDraft(base: ProjectBaseFormValues): ProjectDraft {
     enteric: existing.enteric ?? [],
     manureCH4: existing.manureCH4 ?? [],
     manureN2O: existing.manureN2O ?? [],
+    energyFuel: existing.energyFuel ?? [],
+    energyBalance: existing.energyBalance ?? getDefaultDraft().energyBalance,
     createdAt: existing.createdAt ?? now,
     updatedAt: now,
   };
@@ -78,6 +93,8 @@ export function saveLivestockDraft(rows: LivestockRecord[]): ProjectDraft {
     enteric: existing.enteric ?? [],
     manureCH4: existing.manureCH4 ?? [],
     manureN2O: existing.manureN2O ?? [],
+    energyFuel: existing.energyFuel ?? [],
+    energyBalance: existing.energyBalance ?? getDefaultDraft().energyBalance,
     createdAt: existing.createdAt ?? now,
     updatedAt: now,
   };
@@ -96,6 +113,8 @@ export function saveEntericDraft(rows: EntericRecord[]): ProjectDraft {
     enteric: rows,
     manureCH4: existing.manureCH4 ?? [],
     manureN2O: existing.manureN2O ?? [],
+    energyFuel: existing.energyFuel ?? [],
+    energyBalance: existing.energyBalance ?? getDefaultDraft().energyBalance,
     createdAt: existing.createdAt ?? now,
     updatedAt: now,
   };
@@ -114,6 +133,8 @@ export function saveManureCH4Draft(rows: ManureCH4Record[]): ProjectDraft {
     enteric: existing.enteric ?? [],
     manureCH4: rows,
     manureN2O: existing.manureN2O ?? [],
+    energyFuel: existing.energyFuel ?? [],
+    energyBalance: existing.energyBalance ?? getDefaultDraft().energyBalance,
     createdAt: existing.createdAt ?? now,
     updatedAt: now,
   };
@@ -132,6 +153,31 @@ export function saveManureN2ODraft(rows: ManureN2ORecord[]): ProjectDraft {
     enteric: existing.enteric ?? [],
     manureCH4: existing.manureCH4 ?? [],
     manureN2O: rows,
+    energyFuel: existing.energyFuel ?? [],
+    energyBalance: existing.energyBalance ?? getDefaultDraft().energyBalance,
+    createdAt: existing.createdAt ?? now,
+    updatedAt: now,
+  };
+
+  window.localStorage.setItem(PROJECT_DRAFT_KEY, JSON.stringify(draft));
+  return draft;
+}
+
+export function saveEnergyDraft(
+  fuelRows: FuelCombustionRecord[],
+  energyBalance: EnergyBalanceRecord
+): ProjectDraft {
+  const now = new Date().toISOString();
+  const existing = loadProjectDraft() ?? getDefaultDraft();
+
+  const draft: ProjectDraft = {
+    base: existing.base,
+    livestock: existing.livestock ?? [],
+    enteric: existing.enteric ?? [],
+    manureCH4: existing.manureCH4 ?? [],
+    manureN2O: existing.manureN2O ?? [],
+    energyFuel: fuelRows,
+    energyBalance,
     createdAt: existing.createdAt ?? now,
     updatedAt: now,
   };

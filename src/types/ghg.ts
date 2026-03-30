@@ -74,6 +74,26 @@ export interface ManureN2ORecord {
   notes?: string;
 }
 
+export interface FuelCombustionRecord {
+  fuelType: string;
+  consumptionAmount: number;
+  ncvTJPerUnit: number;
+  carbonContentTonCPerTJ: number;
+  oxidationFactor: number;
+  notes?: string;
+}
+
+export interface EnergyBalanceRecord {
+  purchasedElectricityMWh: number;
+  purchasedElectricityEFtCO2PerMWh: number;
+  purchasedHeatGJ: number;
+  purchasedHeatEFtCO2PerGJ: number;
+  exportedElectricityMWh: number;
+  exportedElectricityEFtCO2PerMWh: number;
+  exportedHeatGJ: number;
+  exportedHeatEFtCO2PerGJ: number;
+}
+
 export interface FactorReference {
   standardVersion: StandardVersion;
   sourceTable: string;
@@ -100,6 +120,8 @@ export interface ProjectDraft {
   enteric?: EntericRecord[];
   manureCH4?: ManureCH4Record[];
   manureN2O?: ManureN2ORecord[];
+  energyFuel?: FuelCombustionRecord[];
+  energyBalance?: EnergyBalanceRecord;
   createdAt: string;
   updatedAt: string;
 }

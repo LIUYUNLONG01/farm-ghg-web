@@ -566,13 +566,12 @@ export default function ManureN2OPage() {
               返回上一页
             </Link>
 
-            <button
-              type="button"
-              disabled
-              className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-400"
+            <Link
+              href="/project/energy"
+              className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
             >
-              下一步：能源与电力模块（待开发）
-            </button>
+              下一步：能源与电力模块
+            </Link>
           </div>
         </form>
       </div>
