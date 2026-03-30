@@ -210,20 +210,27 @@ export default function NewProjectPage() {
 
           <div className="flex flex-wrap gap-3">
             <button
-              type="submit"
-              disabled={isSubmitting}
-              className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+                type="submit"
+                disabled={isSubmitting}
+                className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
-              {isSubmitting ? "保存中..." : "保存基础信息草稿"}
+                {isSubmitting ? "保存中..." : "保存基础信息草稿"}
             </button>
 
             <Link
-              href="/"
-              className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
+                href="/project/livestock"
+                className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
             >
-              返回首页
+                下一步：养殖活动数据
             </Link>
-          </div>
+
+            <Link
+                href="/"
+                className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
+            >
+                返回首页
+            </Link>
+        </div>
         </form>
       </div>
     </main>

@@ -1,7 +1,25 @@
 import type { ProjectBaseFormValues } from "@/lib/schemas/projectBase";
-import type { ProjectDraft } from "@/types/ghg";
+import type { LivestockRecord, ProjectDraft } from "@/types/ghg";
 
 const PROJECT_DRAFT_KEY = "farm-ghg-project-draft";
+
+function getDefaultDraft(): ProjectDraft {
+  const now = new Date().toISOString();
+
+  return {
+    base: {
+      enterpriseName: "",
+      year: new Date().getFullYear(),
+      region: "",
+      farmType: "其他",
+      standardVersion: "NYT4243_2022",
+      notes: undefined,
+    },
+    livestock: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
 
 export function loadProjectDraft(): ProjectDraft | null {
   if (typeof window === "undefined") return null;
@@ -18,7 +36,7 @@ export function loadProjectDraft(): ProjectDraft | null {
 
 export function saveProjectDraft(base: ProjectBaseFormValues): ProjectDraft {
   const now = new Date().toISOString();
-  const existing = loadProjectDraft();
+  const existing = loadProjectDraft() ?? getDefaultDraft();
 
   const draft: ProjectDraft = {
     base: {
@@ -29,8 +47,23 @@ export function saveProjectDraft(base: ProjectBaseFormValues): ProjectDraft {
       standardVersion: base.standardVersion,
       notes: base.notes.trim() ? base.notes.trim() : undefined,
     },
-    livestock: existing?.livestock ?? [],
-    createdAt: existing?.createdAt ?? now,
+    livestock: existing.livestock ?? [],
+    createdAt: existing.createdAt ?? now,
+    updatedAt: now,
+  };
+
+  window.localStorage.setItem(PROJECT_DRAFT_KEY, JSON.stringify(draft));
+  return draft;
+}
+
+export function saveLivestockDraft(rows: LivestockRecord[]): ProjectDraft {
+  const now = new Date().toISOString();
+  const existing = loadProjectDraft() ?? getDefaultDraft();
+
+  const draft: ProjectDraft = {
+    base: existing.base,
+    livestock: rows,
+    createdAt: existing.createdAt ?? now,
     updatedAt: now,
   };
 
