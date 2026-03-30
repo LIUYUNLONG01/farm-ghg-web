@@ -1,6 +1,14 @@
 import { z } from "zod";
 
+function booleanField() {
+  return z.preprocess(
+    (value) => value === true || value === "true",
+    z.boolean()
+  );
+}
+
 export const entericMethodOptions = ["defaultEF", "customEF"] as const;
+export const parameterSourceOptions = ["defaultLibrary", "manual"] as const;
 
 export const entericCH4RowSchema = z.object({
   sourceLivestockIndex: z.number().int().min(0),
@@ -8,6 +16,9 @@ export const entericCH4RowSchema = z.object({
   stage: z.string().trim().min(1, "阶段不能为空"),
   method: z.enum(entericMethodOptions),
   emissionFactor: z.number().positive("请输入大于 0 的排放因子"),
+  parameterSource: z.enum(parameterSourceOptions),
+  parameterSourceLabel: z.string().trim().min(1, "参数来源标签不能为空"),
+  isOverridden: booleanField(),
   notes: z.string().max(300, "备注最多 300 字"),
 });
 

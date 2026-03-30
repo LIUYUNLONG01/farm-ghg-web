@@ -6,6 +6,13 @@ function preprocessNumber(value: unknown) {
   return Number(value);
 }
 
+function booleanField() {
+  return z.preprocess(
+    (value) => value === true || value === "true",
+    z.boolean()
+  );
+}
+
 function requiredInteger(label: string) {
   return z.preprocess(
     preprocessNumber,
@@ -57,6 +64,9 @@ export const manureCH4RowSchema = z.object({
   vsKgPerHeadPerDay: requiredPositiveNumber("VS"),
   boM3PerKgVS: requiredPositiveNumber("B₀"),
   mcfPercent: requiredPercent("MCF", true),
+  parameterSource: z.enum(["defaultLibrary", "manual"]),
+  parameterSourceLabel: z.string().trim().min(1, "参数来源标签不能为空"),
+  isOverridden: booleanField(),
   notes: z.string().max(300, "备注最多 300 字"),
 });
 

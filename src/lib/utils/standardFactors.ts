@@ -57,16 +57,32 @@ export function buildEntericDefaultsForLivestock(
       row.stage
     );
 
+    if (!matched) {
+      return {
+        sourceLivestockIndex: index,
+        species: row.species,
+        stage: row.stage,
+        method: "defaultEF",
+        emissionFactor: 0,
+        unit: "kg CH4/head/year",
+        parameterSource: "manual",
+        parameterSourceLabel: "未匹配默认值",
+        isOverridden: false,
+        notes: "未匹配到默认因子，请手动填写。",
+      };
+    }
+
     return {
       sourceLivestockIndex: index,
       species: row.species,
       stage: row.stage,
       method: "defaultEF",
-      emissionFactor: matched?.emissionFactor ?? 0,
+      emissionFactor: matched.emissionFactor,
       unit: "kg CH4/head/year",
-      notes: matched
-        ? `${matched.sourceLabel}：${matched.note ?? "已自动带入默认值。"}`
-        : "未匹配到默认因子，请手动填写。",
+      parameterSource: "defaultLibrary",
+      parameterSourceLabel: matched.sourceLabel,
+      isOverridden: false,
+      notes: `${matched.sourceLabel}：${matched.note ?? "已自动带入默认值。"}`,
     };
   });
 }
@@ -83,6 +99,9 @@ export function buildFuelRowFromPreset(
     ncvTJPerUnit: preset.ncvTJPerUnit,
     carbonContentTonCPerTJ: preset.carbonContentTonCPerTJ,
     oxidationFactor: preset.oxidationFactor,
+    parameterSource: "fuelPreset" as const,
+    parameterSourceLabel: preset.label,
+    isOverridden: false,
     notes: `${preset.label}；建议单位：${preset.unitHint}；${preset.note}`,
   };
 }

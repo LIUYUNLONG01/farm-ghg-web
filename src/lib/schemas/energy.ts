@@ -6,6 +6,13 @@ function preprocessNumber(value: unknown) {
   return Number(value);
 }
 
+function booleanField() {
+  return z.preprocess(
+    (value) => value === true || value === "true",
+    z.boolean()
+  );
+}
+
 function requiredNonNegativeNumber(label: string) {
   return z.preprocess(
     preprocessNumber,
@@ -37,6 +44,9 @@ export const fuelRowSchema = z.object({
   ncvTJPerUnit: requiredNonNegativeNumber("低位发热量"),
   carbonContentTonCPerTJ: requiredNonNegativeNumber("单位热值含碳量"),
   oxidationFactor: requiredZeroToOne("碳氧化率"),
+  parameterSource: z.enum(["fuelPreset", "manual"]),
+  parameterSourceLabel: z.string().trim().min(1, "参数来源标签不能为空"),
+  isOverridden: booleanField(),
   notes: z.string().max(300, "备注最多 300 字"),
 });
 

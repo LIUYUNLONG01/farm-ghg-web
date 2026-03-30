@@ -21,6 +21,13 @@ export type ModuleKey =
 export type EntericMethod = "defaultEF" | "customEF";
 export type ManureCH4Method = "manualInput";
 export type ManureN2OMethod = "manualInput";
+export type ParameterSource = "defaultLibrary" | "fuelPreset" | "manual";
+
+export interface ParameterMeta {
+  parameterSource: ParameterSource;
+  parameterSourceLabel: string;
+  isOverridden: boolean;
+}
 
 export interface ProjectBase {
   enterpriseName: string;
@@ -39,7 +46,7 @@ export interface LivestockRecord {
   feedingDays?: number;
 }
 
-export interface EntericRecord {
+export interface EntericRecord extends ParameterMeta {
   sourceLivestockIndex: number;
   species: string;
   stage: string;
@@ -49,7 +56,7 @@ export interface EntericRecord {
   notes?: string;
 }
 
-export interface ManureCH4Record {
+export interface ManureCH4Record extends ParameterMeta {
   sourceLivestockIndex: number;
   species: string;
   stage: string;
@@ -62,7 +69,7 @@ export interface ManureCH4Record {
   notes?: string;
 }
 
-export interface ManureN2ORecord {
+export interface ManureN2ORecord extends ParameterMeta {
   sourceLivestockIndex: number;
   species: string;
   stage: string;
@@ -74,7 +81,7 @@ export interface ManureN2ORecord {
   notes?: string;
 }
 
-export interface FuelCombustionRecord {
+export interface FuelCombustionRecord extends ParameterMeta {
   fuelType: string;
   consumptionAmount: number;
   ncvTJPerUnit: number;

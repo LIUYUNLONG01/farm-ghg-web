@@ -18,6 +18,7 @@ import {
   commonManagementSystemPresets,
   getManureCH4DefaultFactor,
 } from "@/lib/utils/standardFactors";
+import { getParameterSourceDisplayLabel } from "@/lib/utils/parameterSource";
 import type {
   LivestockRecord,
   ManureCH4Record,
@@ -35,6 +36,9 @@ function createRowFromLivestock(row: LivestockRecord, index: number) {
     vsKgPerHeadPerDay: 0,
     boM3PerKgVS: 0,
     mcfPercent: 0,
+    parameterSource: "manual" as const,
+    parameterSourceLabel: "尚未带入默认参数",
+    isOverridden: false,
     notes: "",
   };
 }
@@ -46,6 +50,10 @@ function mergeNote(existing: string | undefined, incoming: string) {
   if (!left) return right;
   if (left.includes(right)) return left;
   return `${left}；${right}`;
+}
+
+function isTrue(value: unknown) {
+  return value === true || value === "true";
 }
 
 export default function ManureCH4Page() {
@@ -97,6 +105,9 @@ export default function ManureCH4Page() {
           vsKgPerHeadPerDay: row.vsKgPerHeadPerDay,
           boM3PerKgVS: row.boM3PerKgVS,
           mcfPercent: row.mcfPercent,
+          parameterSource: row.parameterSource,
+          parameterSourceLabel: row.parameterSourceLabel,
+          isOverridden: row.isOverridden,
           notes: row.notes ?? "",
         })),
       });
@@ -133,6 +144,9 @@ export default function ManureCH4Page() {
       vsKgPerHeadPerDay: Number(row.vsKgPerHeadPerDay ?? 0),
       boM3PerKgVS: Number(row.boM3PerKgVS ?? 0),
       mcfPercent: Number(row.mcfPercent ?? 0),
+      parameterSource: row.parameterSource,
+      parameterSourceLabel: row.parameterSourceLabel,
+      isOverridden: isTrue(row.isOverridden),
       notes: row.notes?.trim() ? row.notes.trim() : undefined,
     }));
 
@@ -143,7 +157,25 @@ export default function ManureCH4Page() {
     "w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500";
   const readonlyClass =
     "w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-700";
+  const badgeClass =
+    "rounded-full px-3 py-1 text-xs font-medium";
   const errorClass = "mt-2 text-sm text-red-600";
+
+  const markRowAsManual = (index: number, label = "参数已人工修改并锁定") => {
+    setValue(`rows.${index}.parameterSource`, "manual", { shouldValidate: true });
+    setValue(`rows.${index}.parameterSourceLabel`, label, {
+      shouldValidate: true,
+    });
+    setValue(`rows.${index}.isOverridden`, true, { shouldValidate: true });
+  };
+
+  const markRowPending = (index: number, label = "管理方式已修改，待重新确认参数") => {
+    setValue(`rows.${index}.parameterSource`, "manual", { shouldValidate: true });
+    setValue(`rows.${index}.parameterSourceLabel`, label, {
+      shouldValidate: true,
+    });
+    setValue(`rows.${index}.isOverridden`, false, { shouldValidate: true });
+  };
 
   const applyDefaultsForRow = (index: number) => {
     const row = watchedRows[index];
@@ -171,6 +203,13 @@ export default function ManureCH4Page() {
     setValue(`rows.${index}.mcfPercent`, matched.mcfPercent, {
       shouldValidate: true,
     });
+    setValue(`rows.${index}.parameterSource`, "defaultLibrary", {
+      shouldValidate: true,
+    });
+    setValue(`rows.${index}.parameterSourceLabel`, matched.sourceLabel, {
+      shouldValidate: true,
+    });
+    setValue(`rows.${index}.isOverridden`, false, { shouldValidate: true });
     setValue(
       `rows.${index}.notes`,
       mergeNote(
@@ -187,6 +226,8 @@ export default function ManureCH4Page() {
     let matchedCount = 0;
 
     const nextRows = watchedRows.map((row) => {
+      if (isTrue(row.isOverridden)) return row;
+
       const matched = getManureCH4DefaultFactor(
         standardVersion,
         row.species,
@@ -202,6 +243,9 @@ export default function ManureCH4Page() {
         vsKgPerHeadPerDay: matched.vsKgPerHeadPerDay,
         boM3PerKgVS: matched.boM3PerKgVS,
         mcfPercent: matched.mcfPercent,
+        parameterSource: "defaultLibrary" as const,
+        parameterSourceLabel: matched.sourceLabel,
+        isOverridden: false,
         notes: mergeNote(
           row.notes,
           `${matched.sourceLabel}：${matched.note ?? "已自动带入默认值。"}`
@@ -213,13 +257,14 @@ export default function ManureCH4Page() {
 
     setStatusMessage(
       matchedCount > 0
-        ? `已为 ${matchedCount} 条记录带入默认参数。`
-        : "没有匹配到可带入的默认参数，请检查管理方式名称。"
+        ? `已为 ${matchedCount} 条未锁定记录带入默认参数。`
+        : "没有匹配到可带入的默认参数，或所有记录都已锁定。"
     );
   };
 
   const fillManagementSystemPreset = (index: number, label: string) => {
     setValue(`rows.${index}.managementSystem`, label, { shouldValidate: true });
+    markRowPending(index);
   };
 
   const onSubmit = (values: ManureCH4FormValues) => {
@@ -233,6 +278,9 @@ export default function ManureCH4Page() {
       vsKgPerHeadPerDay: row.vsKgPerHeadPerDay,
       boM3PerKgVS: row.boM3PerKgVS,
       mcfPercent: row.mcfPercent,
+      parameterSource: row.parameterSource,
+      parameterSourceLabel: row.parameterSourceLabel,
+      isOverridden: isTrue(row.isOverridden),
       notes: row.notes.trim() ? row.notes.trim() : undefined,
     }));
 
@@ -305,7 +353,7 @@ export default function ManureCH4Page() {
               <div>
                 <h2 className="text-lg font-semibold">1. 管理方式路径录入</h2>
                 <p className="mt-2 text-sm text-slate-600">
-                  当前支持按“畜种 + 管理方式”自动带入 `VS / B₀ / MCF` 起始默认值。你仍然可以继续手动修改。
+                  当前支持按“畜种 + 管理方式”自动带入 `VS / B₀ / MCF` 默认值。手工修改后该行会自动锁定，不会被“为全部记录带入默认参数”覆盖。
                 </p>
               </div>
 
@@ -314,7 +362,7 @@ export default function ManureCH4Page() {
                 onClick={applyDefaultsForAll}
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
               >
-                为全部记录带入默认参数
+                为全部未锁定记录带入默认参数
               </button>
             </div>
 
@@ -336,6 +384,7 @@ export default function ManureCH4Page() {
                 const factorPerHead =
                   rowPreview?.emissionFactorKgPerHeadYear ?? 0;
                 const rowTotal = rowPreview?.rowCH4TPerYear ?? 0;
+                const isLocked = isTrue(watchedRows[index]?.isOverridden);
 
                 return (
                   <div
@@ -352,7 +401,30 @@ export default function ManureCH4Page() {
                         </p>
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`${badgeClass} ${
+                            watchedRows[index]?.parameterSource === "defaultLibrary"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          来源：
+                          {getParameterSourceDisplayLabel(
+                            watchedRows[index]?.parameterSource ?? "manual"
+                          )}
+                        </span>
+
+                        <span
+                          className={`${badgeClass} ${
+                            isLocked
+                              ? "bg-rose-100 text-rose-700"
+                              : "bg-slate-100 text-slate-700"
+                          }`}
+                        >
+                          {isLocked ? "已人工锁定" : "未锁定"}
+                        </span>
+
                         <button
                           type="button"
                           onClick={() =>
@@ -373,6 +445,9 @@ export default function ManureCH4Page() {
                               vsKgPerHeadPerDay: 0,
                               boM3PerKgVS: 0,
                               mcfPercent: 0,
+                              parameterSource: "manual",
+                              parameterSourceLabel: "尚未带入默认参数",
+                              isOverridden: false,
                               notes: "",
                             })
                           }
@@ -386,7 +461,7 @@ export default function ManureCH4Page() {
                           onClick={() => applyDefaultsForRow(index)}
                           className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
                         >
-                          带入默认参数
+                          恢复该行默认值
                         </button>
 
                         {fields.length > 1 ? (
@@ -411,6 +486,18 @@ export default function ManureCH4Page() {
                       type="hidden"
                       {...register(`rows.${index}.method`)}
                       value="manualInput"
+                    />
+                    <input
+                      type="hidden"
+                      {...register(`rows.${index}.parameterSource`)}
+                    />
+                    <input
+                      type="hidden"
+                      {...register(`rows.${index}.parameterSourceLabel`)}
+                    />
+                    <input
+                      type="hidden"
+                      {...register(`rows.${index}.isOverridden`)}
                     />
 
                     <div className="mb-4 flex flex-wrap gap-2">
@@ -456,7 +543,9 @@ export default function ManureCH4Page() {
                           管理方式
                         </span>
                         <input
-                          {...register(`rows.${index}.managementSystem`)}
+                          {...register(`rows.${index}.managementSystem`, {
+                            onChange: () => markRowPending(index),
+                          })}
                           className={inputClass}
                           placeholder="例如：固体贮存"
                         />
@@ -498,6 +587,8 @@ export default function ManureCH4Page() {
                           step="any"
                           {...register(`rows.${index}.vsKgPerHeadPerDay`, {
                             valueAsNumber: true,
+                            onChange: () =>
+                              markRowAsManual(index, "VS 已人工修改并锁定"),
                           })}
                           className={inputClass}
                           placeholder="例如：2.8"
@@ -520,6 +611,8 @@ export default function ManureCH4Page() {
                           step="any"
                           {...register(`rows.${index}.boM3PerKgVS`, {
                             valueAsNumber: true,
+                            onChange: () =>
+                              markRowAsManual(index, "B₀ 已人工修改并锁定"),
                           })}
                           className={inputClass}
                           placeholder="例如：0.24"
@@ -540,6 +633,8 @@ export default function ManureCH4Page() {
                           step="any"
                           {...register(`rows.${index}.mcfPercent`, {
                             valueAsNumber: true,
+                            onChange: () =>
+                              markRowAsManual(index, "MCF 已人工修改并锁定"),
                           })}
                           className={inputClass}
                           placeholder="例如：35"
@@ -560,6 +655,17 @@ export default function ManureCH4Page() {
                         </div>
                       </label>
                     </div>
+
+                    <label className="mt-4 block">
+                      <span className="mb-2 block text-sm font-medium text-slate-700">
+                        参数来源说明
+                      </span>
+                      <input
+                        {...register(`rows.${index}.parameterSourceLabel`)}
+                        readOnly
+                        className={readonlyClass}
+                      />
+                    </label>
 
                     <label className="mt-4 block">
                       <span className="mb-2 block text-sm font-medium text-slate-700">
@@ -672,6 +778,8 @@ export default function ManureCH4Page() {
                     <th className="border-b border-slate-200 px-3 py-2">VS</th>
                     <th className="border-b border-slate-200 px-3 py-2">B₀</th>
                     <th className="border-b border-slate-200 px-3 py-2">MCF</th>
+                    <th className="border-b border-slate-200 px-3 py-2">来源</th>
+                    <th className="border-b border-slate-200 px-3 py-2">锁定</th>
                     <th className="border-b border-slate-200 px-3 py-2">因子</th>
                     <th className="border-b border-slate-200 px-3 py-2">t CH4/yr</th>
                   </tr>
@@ -699,6 +807,14 @@ export default function ManureCH4Page() {
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
                         {row.mcfPercent.toFixed(2)}%
+                      </td>
+                      <td className="border-b border-slate-100 px-3 py-2">
+                        {getParameterSourceDisplayLabel(
+                          watchedRows[index]?.parameterSource ?? "manual"
+                        )}
+                      </td>
+                      <td className="border-b border-slate-100 px-3 py-2">
+                        {isTrue(watchedRows[index]?.isOverridden) ? "是" : "否"}
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
                         {row.emissionFactorKgPerHeadYear.toFixed(3)} kg/head/yr

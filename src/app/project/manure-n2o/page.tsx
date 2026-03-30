@@ -17,6 +17,7 @@ import {
 import {
   commonManagementSystemPresets,
   getManureN2ODefaultFactor,
+  getParameterSourceDisplay,
 } from "@/lib/utils/standardFactors";
 import type {
   LivestockRecord,
@@ -34,6 +35,8 @@ function createRowFromLivestock(row: LivestockRecord, index: number) {
     sharePercent: 100,
     nexKgNPerHeadYear: 0,
     ef3KgN2ONPerKgN: 0,
+    parameterSourceType: "manual_input" as const,
+    parameterSourceLabel: "手工输入",
     notes: "",
   };
 }
@@ -45,6 +48,16 @@ function mergeNote(existing: string | undefined, incoming: string) {
   if (!left) return right;
   if (left.includes(right)) return left;
   return `${left}；${right}`;
+}
+
+function sourceBadgeClass(sourceType: string) {
+  if (sourceType === "default_library") {
+    return "rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700";
+  }
+  if (sourceType === "preset_template") {
+    return "rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700";
+  }
+  return "rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700";
 }
 
 export default function ManureN2OPage() {
@@ -95,6 +108,8 @@ export default function ManureN2OPage() {
           sharePercent: row.sharePercent,
           nexKgNPerHeadYear: row.nexKgNPerHeadYear,
           ef3KgN2ONPerKgN: row.ef3KgN2ONPerKgN,
+          parameterSourceType: row.parameterSourceType ?? "manual_input",
+          parameterSourceLabel: row.parameterSourceLabel ?? "手工输入",
           notes: row.notes ?? "",
         })),
       });
@@ -130,6 +145,8 @@ export default function ManureN2OPage() {
       sharePercent: Number(row.sharePercent ?? 0),
       nexKgNPerHeadYear: Number(row.nexKgNPerHeadYear ?? 0),
       ef3KgN2ONPerKgN: Number(row.ef3KgN2ONPerKgN ?? 0),
+      parameterSourceType: row.parameterSourceType ?? "manual_input",
+      parameterSourceLabel: row.parameterSourceLabel ?? "手工输入",
       notes: row.notes?.trim() ? row.notes.trim() : undefined,
     }));
 
@@ -165,6 +182,16 @@ export default function ManureN2OPage() {
     setValue(`rows.${index}.ef3KgN2ONPerKgN`, matched.ef3KgN2ONPerKgN, {
       shouldValidate: true,
     });
+    setValue(`rows.${index}.parameterSourceType`, "default_library", {
+      shouldValidate: true,
+    });
+    setValue(
+      `rows.${index}.parameterSourceLabel`,
+      `${standardVersion} 默认库：${matched.sourceLabel}`,
+      {
+        shouldValidate: true,
+      }
+    );
     setValue(
       `rows.${index}.notes`,
       mergeNote(
@@ -195,6 +222,8 @@ export default function ManureN2OPage() {
         ...row,
         nexKgNPerHeadYear: matched.nexKgNPerHeadYear,
         ef3KgN2ONPerKgN: matched.ef3KgN2ONPerKgN,
+        parameterSourceType: "default_library" as const,
+        parameterSourceLabel: `${standardVersion} 默认库：${matched.sourceLabel}`,
         notes: mergeNote(
           row.notes,
           `${matched.sourceLabel}：${matched.note ?? "已自动带入默认值。"}`
@@ -215,6 +244,17 @@ export default function ManureN2OPage() {
     setValue(`rows.${index}.managementSystem`, label, { shouldValidate: true });
   };
 
+  const markRowManual = (index: number, label: string) => {
+    setValue(`rows.${index}.parameterSourceType`, "manual_input", {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    setValue(`rows.${index}.parameterSourceLabel`, label, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
+
   const onSubmit = (values: ManureN2OFormValues) => {
     const rows: ManureN2ORecord[] = values.rows.map((row) => ({
       sourceLivestockIndex: row.sourceLivestockIndex,
@@ -225,6 +265,8 @@ export default function ManureN2OPage() {
       sharePercent: row.sharePercent,
       nexKgNPerHeadYear: row.nexKgNPerHeadYear,
       ef3KgN2ONPerKgN: row.ef3KgN2ONPerKgN,
+      parameterSourceType: row.parameterSourceType,
+      parameterSourceLabel: row.parameterSourceLabel,
       notes: row.notes.trim() ? row.notes.trim() : undefined,
     }));
 
@@ -328,6 +370,10 @@ export default function ManureN2OPage() {
                 const factorPerHead =
                   rowPreview?.emissionFactorKgN2OPerHeadYear ?? 0;
                 const rowTotal = rowPreview?.rowN2OTPerYear ?? 0;
+                const rowSourceType =
+                  watchedRows[index]?.parameterSourceType ?? "manual_input";
+                const rowSourceLabel =
+                  watchedRows[index]?.parameterSourceLabel ?? "手工输入";
 
                 return (
                   <div
@@ -344,51 +390,62 @@ export default function ManureN2OPage() {
                         </p>
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            append({
-                              sourceLivestockIndex:
-                                watchedRows[index]?.sourceLivestockIndex ?? 0,
-                              species:
-                                watchedRows[index]?.species ??
-                                livestockRows[0]?.species ??
-                                "",
-                              stage:
-                                watchedRows[index]?.stage ??
-                                livestockRows[0]?.stage ??
-                                "",
-                              method: "manualInput",
-                              managementSystem: "",
-                              sharePercent: 0,
-                              nexKgNPerHeadYear: 0,
-                              ef3KgN2ONPerKgN: 0,
-                              notes: "",
-                            })
-                          }
-                          className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                        >
-                          为该畜种新增管理方式
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => applyDefaultsForRow(index)}
-                          className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                        >
-                          带入默认参数
-                        </button>
-
-                        {fields.length > 1 ? (
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
-                            onClick={() => remove(index)}
-                            className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                            onClick={() =>
+                              append({
+                                sourceLivestockIndex:
+                                  watchedRows[index]?.sourceLivestockIndex ?? 0,
+                                species:
+                                  watchedRows[index]?.species ??
+                                  livestockRows[0]?.species ??
+                                  "",
+                                stage:
+                                  watchedRows[index]?.stage ??
+                                  livestockRows[0]?.stage ??
+                                  "",
+                                method: "manualInput",
+                                managementSystem: "",
+                                sharePercent: 0,
+                                nexKgNPerHeadYear: 0,
+                                ef3KgN2ONPerKgN: 0,
+                                parameterSourceType: "manual_input",
+                                parameterSourceLabel: "手工输入",
+                                notes: "",
+                              })
+                            }
+                            className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
                           >
-                            删除
+                            为该畜种新增管理方式
                           </button>
-                        ) : null}
+
+                          <button
+                            type="button"
+                            onClick={() => applyDefaultsForRow(index)}
+                            className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                          >
+                            带入默认参数
+                          </button>
+
+                          {fields.length > 1 ? (
+                            <button
+                              type="button"
+                              onClick={() => remove(index)}
+                              className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                            >
+                              删除
+                            </button>
+                          ) : null}
+                        </div>
+
+                        <span className={sourceBadgeClass(rowSourceType)}>
+                          {getParameterSourceDisplay(rowSourceType)}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {rowSourceLabel}
+                        </span>
                       </div>
                     </div>
 
@@ -403,6 +460,8 @@ export default function ManureN2OPage() {
                       {...register(`rows.${index}.method`)}
                       value="manualInput"
                     />
+                    <input type="hidden" {...register(`rows.${index}.parameterSourceType`)} />
+                    <input type="hidden" {...register(`rows.${index}.parameterSourceLabel`)} />
 
                     <div className="mb-4 flex flex-wrap gap-2">
                       {commonManagementSystemPresets.map((preset) => (
@@ -447,7 +506,10 @@ export default function ManureN2OPage() {
                           管理方式
                         </span>
                         <input
-                          {...register(`rows.${index}.managementSystem`)}
+                          {...register(`rows.${index}.managementSystem`, {
+                            onChange: () =>
+                              markRowManual(index, "手工修改管理方式或参数"),
+                          })}
                           className={inputClass}
                           placeholder="例如：固体贮存"
                         />
@@ -469,6 +531,8 @@ export default function ManureN2OPage() {
                           step="any"
                           {...register(`rows.${index}.sharePercent`, {
                             valueAsNumber: true,
+                            onChange: () =>
+                              markRowManual(index, "手工修改管理方式或参数"),
                           })}
                           className={inputClass}
                           placeholder="例如：60"
@@ -489,6 +553,8 @@ export default function ManureN2OPage() {
                           step="any"
                           {...register(`rows.${index}.nexKgNPerHeadYear`, {
                             valueAsNumber: true,
+                            onChange: () =>
+                              markRowManual(index, "手工修改管理方式或参数"),
                           })}
                           className={inputClass}
                           placeholder="例如：80"
@@ -511,6 +577,8 @@ export default function ManureN2OPage() {
                           step="any"
                           {...register(`rows.${index}.ef3KgN2ONPerKgN`, {
                             valueAsNumber: true,
+                            onChange: () =>
+                              markRowManual(index, "手工修改管理方式或参数"),
                           })}
                           className={inputClass}
                           placeholder="例如：0.005"
