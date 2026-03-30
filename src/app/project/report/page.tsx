@@ -119,10 +119,10 @@ export default function ReportPage() {
 
           <div className="flex gap-3">
             <Link
-              href="/project/results"
+              href="/project/checks"
               className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
             >
-              返回总结果页
+              返回质量检查页
             </Link>
             <Link
               href="/"
@@ -168,7 +168,7 @@ export default function ReportPage() {
           <section className={`${cardClass} xl:col-span-3`}>
             <h2 className="text-lg font-semibold">2. 导出操作</h2>
             <p className="mt-2 text-sm text-slate-600">
-              当前支持 JSON、CSV、TXT 和浏览器打印。后续你如果要升级成 Word、Excel 或 PDF，再在这一页继续扩展。
+              当前支持 JSON、CSV、TXT 和浏览器打印。建议先完成质量检查，再进行导出。
             </p>
 
             <div className="mt-4 flex flex-wrap gap-3">
@@ -298,7 +298,7 @@ export default function ReportPage() {
 
         <div className="mt-6 flex flex-wrap gap-3 print:hidden">
           <Link
-            href="/project/results"
+            href="/project/checks"
             className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
           >
             返回上一页
@@ -309,7 +309,7 @@ export default function ReportPage() {
             disabled
             className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-400"
           >
-            下一步：参数库标准化（待开发）
+            下一步：参数库精修 / Excel 导出（待开发）
           </button>
         </div>
       </div>

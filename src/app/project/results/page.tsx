@@ -240,10 +240,17 @@ export default function ResultsPage() {
           </Link>
 
           <Link
+            href="/project/checks"
+            className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
+          >
+            下一步：质量检查页
+          </Link>
+
+          <Link
             href="/project/report"
             className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
           >
-            下一步：报告导出页
+            去报告导出页
           </Link>
         </div>
       </div>
