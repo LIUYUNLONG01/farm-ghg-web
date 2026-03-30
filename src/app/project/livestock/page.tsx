@@ -273,6 +273,12 @@ export default function LivestockPage() {
             >
               再新增一条
             </button>
+            <Link
+                href="/project/enteric"
+                className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
+            > 
+                下一步：肠道发酵 CH4
+            </Link>
           </div>
         </form>
       </div>

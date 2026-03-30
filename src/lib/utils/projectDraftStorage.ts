@@ -1,5 +1,9 @@
 import type { ProjectBaseFormValues } from "@/lib/schemas/projectBase";
-import type { LivestockRecord, ProjectDraft } from "@/types/ghg";
+import type {
+  EntericRecord,
+  LivestockRecord,
+  ProjectDraft,
+} from "@/types/ghg";
 
 const PROJECT_DRAFT_KEY = "farm-ghg-project-draft";
 
@@ -16,6 +20,7 @@ function getDefaultDraft(): ProjectDraft {
       notes: undefined,
     },
     livestock: [],
+    enteric: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -48,6 +53,7 @@ export function saveProjectDraft(base: ProjectBaseFormValues): ProjectDraft {
       notes: base.notes.trim() ? base.notes.trim() : undefined,
     },
     livestock: existing.livestock ?? [],
+    enteric: existing.enteric ?? [],
     createdAt: existing.createdAt ?? now,
     updatedAt: now,
   };
@@ -63,6 +69,23 @@ export function saveLivestockDraft(rows: LivestockRecord[]): ProjectDraft {
   const draft: ProjectDraft = {
     base: existing.base,
     livestock: rows,
+    enteric: existing.enteric ?? [],
+    createdAt: existing.createdAt ?? now,
+    updatedAt: now,
+  };
+
+  window.localStorage.setItem(PROJECT_DRAFT_KEY, JSON.stringify(draft));
+  return draft;
+}
+
+export function saveEntericDraft(rows: EntericRecord[]): ProjectDraft {
+  const now = new Date().toISOString();
+  const existing = loadProjectDraft() ?? getDefaultDraft();
+
+  const draft: ProjectDraft = {
+    base: existing.base,
+    livestock: existing.livestock ?? [],
+    enteric: rows,
     createdAt: existing.createdAt ?? now,
     updatedAt: now,
   };

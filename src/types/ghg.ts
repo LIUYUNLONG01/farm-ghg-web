@@ -18,6 +18,8 @@ export type ModuleKey =
   | "purchasedEnergy"
   | "exportedEnergy";
 
+export type EntericMethod = "defaultEF" | "customEF";
+
 export interface ProjectBase {
   enterpriseName: string;
   year: number;
@@ -33,6 +35,16 @@ export interface LivestockRecord {
   annualAverageHead: number;
   annualOutputHead?: number;
   feedingDays?: number;
+}
+
+export interface EntericRecord {
+  sourceLivestockIndex: number;
+  species: string;
+  stage: string;
+  method: EntericMethod;
+  emissionFactor: number;
+  unit: "kg CH4/head/year";
+  notes?: string;
 }
 
 export interface FactorReference {
@@ -58,6 +70,7 @@ export interface ModuleResult {
 export interface ProjectDraft {
   base: ProjectBase;
   livestock: LivestockRecord[];
+  enteric?: EntericRecord[];
   createdAt: string;
   updatedAt: string;
 }
