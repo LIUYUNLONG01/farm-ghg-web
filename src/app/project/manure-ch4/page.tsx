@@ -14,7 +14,15 @@ import {
   loadProjectDraft,
   saveManureCH4Draft,
 } from "@/lib/utils/projectDraftStorage";
-import type { LivestockRecord, ManureCH4Record } from "@/types/ghg";
+import {
+  commonManagementSystemPresets,
+  getManureCH4DefaultFactor,
+} from "@/lib/utils/standardFactors";
+import type {
+  LivestockRecord,
+  ManureCH4Record,
+  StandardVersion,
+} from "@/types/ghg";
 
 function createRowFromLivestock(row: LivestockRecord, index: number) {
   return {
@@ -31,8 +39,19 @@ function createRowFromLivestock(row: LivestockRecord, index: number) {
   };
 }
 
+function mergeNote(existing: string | undefined, incoming: string) {
+  const left = (existing ?? "").trim();
+  const right = incoming.trim();
+
+  if (!left) return right;
+  if (left.includes(right)) return left;
+  return `${left}；${right}`;
+}
+
 export default function ManureCH4Page() {
   const [projectName, setProjectName] = useState("");
+  const [standardVersion, setStandardVersion] =
+    useState<StandardVersion>("NYT4243_2022");
   const [statusMessage, setStatusMessage] = useState("");
   const [livestockRows, setLivestockRows] = useState<LivestockRecord[]>([]);
 
@@ -41,6 +60,7 @@ export default function ManureCH4Page() {
     register,
     handleSubmit,
     reset,
+    setValue,
     watch,
     formState: { errors, isSubmitting },
   } = useForm<ManureCH4FormValues>({
@@ -62,6 +82,7 @@ export default function ManureCH4Page() {
     if (!draft) return;
 
     setProjectName(draft.base.enterpriseName || "未命名项目");
+    setStandardVersion(draft.base.standardVersion);
     setLivestockRows(draft.livestock ?? []);
 
     if (draft.manureCH4 && draft.manureCH4.length > 0) {
@@ -124,6 +145,83 @@ export default function ManureCH4Page() {
     "w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-700";
   const errorClass = "mt-2 text-sm text-red-600";
 
+  const applyDefaultsForRow = (index: number) => {
+    const row = watchedRows[index];
+    if (!row) return;
+
+    const matched = getManureCH4DefaultFactor(
+      standardVersion,
+      row.species,
+      row.managementSystem
+    );
+
+    if (!matched) {
+      setStatusMessage(
+        `第 ${index + 1} 行未匹配到默认参数，请先使用常见管理方式名称，或手动填写。`
+      );
+      return;
+    }
+
+    setValue(`rows.${index}.vsKgPerHeadPerDay`, matched.vsKgPerHeadPerDay, {
+      shouldValidate: true,
+    });
+    setValue(`rows.${index}.boM3PerKgVS`, matched.boM3PerKgVS, {
+      shouldValidate: true,
+    });
+    setValue(`rows.${index}.mcfPercent`, matched.mcfPercent, {
+      shouldValidate: true,
+    });
+    setValue(
+      `rows.${index}.notes`,
+      mergeNote(
+        row.notes,
+        `${matched.sourceLabel}：${matched.note ?? "已自动带入默认值。"}`
+      ),
+      { shouldValidate: true }
+    );
+
+    setStatusMessage(`第 ${index + 1} 行已带入默认参数。`);
+  };
+
+  const applyDefaultsForAll = () => {
+    let matchedCount = 0;
+
+    const nextRows = watchedRows.map((row) => {
+      const matched = getManureCH4DefaultFactor(
+        standardVersion,
+        row.species,
+        row.managementSystem
+      );
+
+      if (!matched) return row;
+
+      matchedCount += 1;
+
+      return {
+        ...row,
+        vsKgPerHeadPerDay: matched.vsKgPerHeadPerDay,
+        boM3PerKgVS: matched.boM3PerKgVS,
+        mcfPercent: matched.mcfPercent,
+        notes: mergeNote(
+          row.notes,
+          `${matched.sourceLabel}：${matched.note ?? "已自动带入默认值。"}`
+        ),
+      };
+    });
+
+    reset({ rows: nextRows });
+
+    setStatusMessage(
+      matchedCount > 0
+        ? `已为 ${matchedCount} 条记录带入默认参数。`
+        : "没有匹配到可带入的默认参数，请检查管理方式名称。"
+    );
+  };
+
+  const fillManagementSystemPreset = (index: number, label: string) => {
+    setValue(`rows.${index}.managementSystem`, label, { shouldValidate: true });
+  };
+
   const onSubmit = (values: ManureCH4FormValues) => {
     const rows: ManureCH4Record[] = values.rows.map((row) => ({
       sourceLivestockIndex: row.sourceLivestockIndex,
@@ -181,7 +279,7 @@ export default function ManureCH4Page() {
               粪污管理 CH4
             </h1>
             <p className="mt-3 text-sm leading-7 text-slate-600">
-              当前项目：{projectName || "未命名项目"}
+              当前项目：{projectName || "未命名项目"} · 标准版本：{standardVersion}
             </p>
           </div>
 
@@ -207,9 +305,28 @@ export default function ManureCH4Page() {
               <div>
                 <h2 className="text-lg font-semibold">1. 管理方式路径录入</h2>
                 <p className="mt-2 text-sm text-slate-600">
-                  每一行代表一条“畜种 × 管理方式”路径。一个畜种如果有多种管理方式，就为它新增多行，并保证同一畜种的占比加总为 100%。
+                  当前支持按“畜种 + 管理方式”自动带入 `VS / B₀ / MCF` 起始默认值。你仍然可以继续手动修改。
                 </p>
               </div>
+
+              <button
+                type="button"
+                onClick={applyDefaultsForAll}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              >
+                为全部记录带入默认参数
+              </button>
+            </div>
+
+            <div className="mb-6 flex flex-wrap gap-2">
+              {commonManagementSystemPresets.map((preset) => (
+                <span
+                  key={preset.id}
+                  className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600"
+                >
+                  {preset.label}
+                </span>
+              ))}
             </div>
 
             <div className="space-y-6">
@@ -264,6 +381,14 @@ export default function ManureCH4Page() {
                           为该畜种新增管理方式
                         </button>
 
+                        <button
+                          type="button"
+                          onClick={() => applyDefaultsForRow(index)}
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                        >
+                          带入默认参数
+                        </button>
+
                         {fields.length > 1 ? (
                           <button
                             type="button"
@@ -287,6 +412,21 @@ export default function ManureCH4Page() {
                       {...register(`rows.${index}.method`)}
                       value="manualInput"
                     />
+
+                    <div className="mb-4 flex flex-wrap gap-2">
+                      {commonManagementSystemPresets.map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() =>
+                            fillManagementSystemPreset(index, preset.label)
+                          }
+                          className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                        >
+                          填入：{preset.label}
+                        </button>
+                      ))}
+                    </div>
 
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                       <label className="block">
@@ -318,7 +458,7 @@ export default function ManureCH4Page() {
                         <input
                           {...register(`rows.${index}.managementSystem`)}
                           className={inputClass}
-                          placeholder="例如：液态/浆态贮存"
+                          placeholder="例如：固体贮存"
                         />
                         {errors.rows?.[index]?.managementSystem?.message ? (
                           <p className={errorClass}>

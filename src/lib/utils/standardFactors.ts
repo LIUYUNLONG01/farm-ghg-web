@@ -1,8 +1,12 @@
 import { entericDefaultFactorLibrary } from "@/data/factors/entericDefaults";
 import { fuelPresetLibrary } from "@/data/factors/fuelPresets";
+import {
+  commonManagementSystemPresets,
+  manureCH4DefaultFactorLibrary,
+  manureN2ODefaultFactorLibrary,
+} from "@/data/factors/manureDefaults";
 import type {
   EntericRecord,
-  FuelCombustionRecord,
   LivestockRecord,
   StandardVersion,
 } from "@/types/ghg";
@@ -69,7 +73,7 @@ export function buildEntericDefaultsForLivestock(
 
 export function buildFuelRowFromPreset(
   presetId: string
-): FuelCombustionRecord | null {
+) {
   const preset = fuelPresetLibrary.find((item) => item.id === presetId);
   if (!preset) return null;
 
@@ -83,4 +87,45 @@ export function buildFuelRowFromPreset(
   };
 }
 
-export { fuelPresetLibrary };
+export function getManureCH4DefaultFactor(
+  standardVersion: StandardVersion,
+  species: string,
+  managementSystem: string
+) {
+  const library = manureCH4DefaultFactorLibrary[standardVersion] ?? [];
+
+  const match = library.find((item) => {
+    const speciesOk = includesAlias(species, item.speciesAliases);
+    const managementOk = includesAlias(
+      managementSystem,
+      item.managementSystemAliases
+    );
+    return speciesOk && managementOk;
+  });
+
+  return match ?? null;
+}
+
+export function getManureN2ODefaultFactor(
+  standardVersion: StandardVersion,
+  species: string,
+  managementSystem: string
+) {
+  const library = manureN2ODefaultFactorLibrary[standardVersion] ?? [];
+
+  const match = library.find((item) => {
+    const speciesOk = includesAlias(species, item.speciesAliases);
+    const managementOk = includesAlias(
+      managementSystem,
+      item.managementSystemAliases
+    );
+    return speciesOk && managementOk;
+  });
+
+  return match ?? null;
+}
+
+export {
+  fuelPresetLibrary,
+  commonManagementSystemPresets,
+};
