@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
+import { calcEntericCH4 } from "@/lib/calculators/entericCH4";
 import {
   entericCH4Schema,
   type EntericCH4FormValues,
@@ -71,17 +72,26 @@ export default function EntericPage() {
     }
   }, [reset]);
 
-  const totalPreviewTCH4 = useMemo(() => {
-    if (!watchedRows || watchedRows.length === 0) return 0;
+  const calculationPreview = useMemo(() => {
+    if (!watchedRows || watchedRows.length === 0) {
+      return {
+        rows: [],
+        totalCH4KgPerYear: 0,
+        totalCH4TPerYear: 0,
+      };
+    }
 
-    return watchedRows.reduce((sum, row) => {
-      const head =
-        livestockRows[row.sourceLivestockIndex]?.annualAverageHead ?? 0;
-      const ef = Number(row.emissionFactor ?? 0);
+    const normalizedRows: EntericRecord[] = watchedRows.map((row) => ({
+      sourceLivestockIndex: row.sourceLivestockIndex,
+      species: row.species,
+      stage: row.stage,
+      method: row.method,
+      emissionFactor: Number(row.emissionFactor ?? 0),
+      unit: "kg CH4/head/year",
+      notes: row.notes?.trim() ? row.notes.trim() : undefined,
+    }));
 
-      if (!Number.isFinite(ef) || ef <= 0 || head <= 0) return sum;
-      return sum + (head * ef) / 1000;
-    }, 0);
+    return calcEntericCH4(livestockRows, normalizedRows);
   }, [watchedRows, livestockRows]);
 
   const inputClass =
@@ -173,16 +183,9 @@ export default function EntericPage() {
 
             <div className="mt-6 space-y-6">
               {watchedRows?.map((_, index) => {
-                const head =
-                  livestockRows[index]?.annualAverageHead ??
-                  livestockRows[watchedRows[index]?.sourceLivestockIndex ?? 0]
-                    ?.annualAverageHead ??
-                  0;
-                const ef = Number(watchedRows[index]?.emissionFactor ?? 0);
-                const preview =
-                  Number.isFinite(ef) && ef > 0 && head > 0
-                    ? (head * ef) / 1000
-                    : 0;
+                const rowPreview = calculationPreview.rows[index];
+                const head = rowPreview?.annualAverageHead ?? 0;
+                const preview = rowPreview?.ch4TPerYear ?? 0;
 
                 return (
                   <div
@@ -303,11 +306,57 @@ export default function EntericPage() {
             <h2 className="text-lg font-semibold">2. 当前状态</h2>
             <div className="mt-3 space-y-2 text-sm text-slate-600">
               <p>本页已连接养殖活动记录</p>
-              <p>当前年度 CH4 预览总量：{totalPreviewTCH4.toFixed(3)} t CH4/yr</p>
+              <p>
+                当前年度 CH4 预览总量：
+                {calculationPreview.totalCH4TPerYear.toFixed(3)} t CH4/yr
+              </p>
               <p>保存方式：浏览器本地草稿</p>
               {statusMessage ? (
                 <p className="font-medium text-slate-800">{statusMessage}</p>
               ) : null}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold">3. 计算明细预览</h2>
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-full border-separate border-spacing-0 text-sm">
+                <thead>
+                  <tr className="text-left text-slate-600">
+                    <th className="border-b border-slate-200 px-3 py-2">畜种</th>
+                    <th className="border-b border-slate-200 px-3 py-2">阶段</th>
+                    <th className="border-b border-slate-200 px-3 py-2">年平均存栏</th>
+                    <th className="border-b border-slate-200 px-3 py-2">排放因子</th>
+                    <th className="border-b border-slate-200 px-3 py-2">kg CH4/yr</th>
+                    <th className="border-b border-slate-200 px-3 py-2">t CH4/yr</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {calculationPreview.rows.map((row, index) => (
+                    <tr key={`${row.species}-${row.stage}-${index}`}>
+                      <td className="border-b border-slate-100 px-3 py-2">
+                        {row.species}
+                      </td>
+                      <td className="border-b border-slate-100 px-3 py-2">
+                        {row.stage}
+                      </td>
+                      <td className="border-b border-slate-100 px-3 py-2">
+                        {row.annualAverageHead}
+                      </td>
+                      <td className="border-b border-slate-100 px-3 py-2">
+                        {row.emissionFactor}
+                      </td>
+                      <td className="border-b border-slate-100 px-3 py-2">
+                        {row.ch4KgPerYear.toFixed(2)}
+                      </td>
+                      <td className="border-b border-slate-100 px-3 py-2">
+                        {row.ch4TPerYear.toFixed(3)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </section>
 
@@ -325,6 +374,13 @@ export default function EntericPage() {
               className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
             >
               返回上一页
+            </Link>
+
+            <Link
+              href="/project/manure-ch4"
+              className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
+            >
+              下一步：粪污管理 CH4
             </Link>
           </div>
         </form>
