@@ -612,13 +612,12 @@ export default function EnergyPage() {
               返回上一页
             </Link>
 
-            <button
-              type="button"
-              disabled
-              className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-400"
+            <Link
+              href="/project/results"
+              className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
             >
-              下一步：总结果页（待开发）
-            </button>
+              下一步：总结果页
+            </Link>
           </div>
         </form>
       </div>
