@@ -2,6 +2,8 @@ import type { ProjectBaseFormValues } from "@/lib/schemas/projectBase";
 import type {
   EntericRecord,
   LivestockRecord,
+  ManureCH4Record,
+  ManureN2ORecord,
   ProjectDraft,
 } from "@/types/ghg";
 
@@ -21,6 +23,8 @@ function getDefaultDraft(): ProjectDraft {
     },
     livestock: [],
     enteric: [],
+    manureCH4: [],
+    manureN2O: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -54,6 +58,8 @@ export function saveProjectDraft(base: ProjectBaseFormValues): ProjectDraft {
     },
     livestock: existing.livestock ?? [],
     enteric: existing.enteric ?? [],
+    manureCH4: existing.manureCH4 ?? [],
+    manureN2O: existing.manureN2O ?? [],
     createdAt: existing.createdAt ?? now,
     updatedAt: now,
   };
@@ -70,6 +76,8 @@ export function saveLivestockDraft(rows: LivestockRecord[]): ProjectDraft {
     base: existing.base,
     livestock: rows,
     enteric: existing.enteric ?? [],
+    manureCH4: existing.manureCH4 ?? [],
+    manureN2O: existing.manureN2O ?? [],
     createdAt: existing.createdAt ?? now,
     updatedAt: now,
   };
@@ -86,6 +94,44 @@ export function saveEntericDraft(rows: EntericRecord[]): ProjectDraft {
     base: existing.base,
     livestock: existing.livestock ?? [],
     enteric: rows,
+    manureCH4: existing.manureCH4 ?? [],
+    manureN2O: existing.manureN2O ?? [],
+    createdAt: existing.createdAt ?? now,
+    updatedAt: now,
+  };
+
+  window.localStorage.setItem(PROJECT_DRAFT_KEY, JSON.stringify(draft));
+  return draft;
+}
+
+export function saveManureCH4Draft(rows: ManureCH4Record[]): ProjectDraft {
+  const now = new Date().toISOString();
+  const existing = loadProjectDraft() ?? getDefaultDraft();
+
+  const draft: ProjectDraft = {
+    base: existing.base,
+    livestock: existing.livestock ?? [],
+    enteric: existing.enteric ?? [],
+    manureCH4: rows,
+    manureN2O: existing.manureN2O ?? [],
+    createdAt: existing.createdAt ?? now,
+    updatedAt: now,
+  };
+
+  window.localStorage.setItem(PROJECT_DRAFT_KEY, JSON.stringify(draft));
+  return draft;
+}
+
+export function saveManureN2ODraft(rows: ManureN2ORecord[]): ProjectDraft {
+  const now = new Date().toISOString();
+  const existing = loadProjectDraft() ?? getDefaultDraft();
+
+  const draft: ProjectDraft = {
+    base: existing.base,
+    livestock: existing.livestock ?? [],
+    enteric: existing.enteric ?? [],
+    manureCH4: existing.manureCH4 ?? [],
+    manureN2O: rows,
     createdAt: existing.createdAt ?? now,
     updatedAt: now,
   };

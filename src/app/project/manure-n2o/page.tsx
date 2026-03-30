@@ -5,16 +5,16 @@ import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { calcManureCH4 } from "@/lib/calculators/manureCH4";
+import { calcManureN2O } from "@/lib/calculators/manureN2O";
 import {
-  manureCH4Schema,
-  type ManureCH4FormValues,
-} from "@/lib/schemas/manureCH4";
+  manureN2OSchema,
+  type ManureN2OFormValues,
+} from "@/lib/schemas/manureN2O";
 import {
   loadProjectDraft,
-  saveManureCH4Draft,
+  saveManureN2ODraft,
 } from "@/lib/utils/projectDraftStorage";
-import type { LivestockRecord, ManureCH4Record } from "@/types/ghg";
+import type { LivestockRecord, ManureN2ORecord } from "@/types/ghg";
 
 function createRowFromLivestock(row: LivestockRecord, index: number) {
   return {
@@ -24,14 +24,13 @@ function createRowFromLivestock(row: LivestockRecord, index: number) {
     method: "manualInput" as const,
     managementSystem: "",
     sharePercent: 100,
-    vsKgPerHeadPerDay: 0,
-    boM3PerKgVS: 0,
-    mcfPercent: 0,
+    nexKgNPerHeadYear: 0,
+    ef3KgN2ONPerKgN: 0,
     notes: "",
   };
 }
 
-export default function ManureCH4Page() {
+export default function ManureN2OPage() {
   const [projectName, setProjectName] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [livestockRows, setLivestockRows] = useState<LivestockRecord[]>([]);
@@ -43,8 +42,8 @@ export default function ManureCH4Page() {
     reset,
     watch,
     formState: { errors, isSubmitting },
-  } = useForm<ManureCH4FormValues>({
-    resolver: zodResolver(manureCH4Schema),
+  } = useForm<ManureN2OFormValues>({
+    resolver: zodResolver(manureN2OSchema),
     defaultValues: {
       rows: [],
     },
@@ -64,22 +63,21 @@ export default function ManureCH4Page() {
     setProjectName(draft.base.enterpriseName || "未命名项目");
     setLivestockRows(draft.livestock ?? []);
 
-    if (draft.manureCH4 && draft.manureCH4.length > 0) {
+    if (draft.manureN2O && draft.manureN2O.length > 0) {
       reset({
-        rows: draft.manureCH4.map((row) => ({
+        rows: draft.manureN2O.map((row) => ({
           sourceLivestockIndex: row.sourceLivestockIndex,
           species: row.species,
           stage: row.stage,
           method: "manualInput" as const,
           managementSystem: row.managementSystem,
           sharePercent: row.sharePercent,
-          vsKgPerHeadPerDay: row.vsKgPerHeadPerDay,
-          boM3PerKgVS: row.boM3PerKgVS,
-          mcfPercent: row.mcfPercent,
+          nexKgNPerHeadYear: row.nexKgNPerHeadYear,
+          ef3KgN2ONPerKgN: row.ef3KgN2ONPerKgN,
           notes: row.notes ?? "",
         })),
       });
-      setStatusMessage("已加载浏览器中的粪污管理 CH4 草稿。");
+      setStatusMessage("已加载浏览器中的粪污管理 N2O 草稿。");
       return;
     }
 
@@ -97,25 +95,24 @@ export default function ManureCH4Page() {
       return {
         rows: [],
         groups: [],
-        totalCH4KgPerYear: 0,
-        totalCH4TPerYear: 0,
+        totalN2OKgPerYear: 0,
+        totalN2OTPerYear: 0,
       };
     }
 
-    const normalizedRows: ManureCH4Record[] = watchedRows.map((row) => ({
+    const normalizedRows: ManureN2ORecord[] = watchedRows.map((row) => ({
       sourceLivestockIndex: row.sourceLivestockIndex,
       species: row.species,
       stage: row.stage,
       method: "manualInput",
       managementSystem: row.managementSystem,
       sharePercent: Number(row.sharePercent ?? 0),
-      vsKgPerHeadPerDay: Number(row.vsKgPerHeadPerDay ?? 0),
-      boM3PerKgVS: Number(row.boM3PerKgVS ?? 0),
-      mcfPercent: Number(row.mcfPercent ?? 0),
+      nexKgNPerHeadYear: Number(row.nexKgNPerHeadYear ?? 0),
+      ef3KgN2ONPerKgN: Number(row.ef3KgN2ONPerKgN ?? 0),
       notes: row.notes?.trim() ? row.notes.trim() : undefined,
     }));
 
-    return calcManureCH4(livestockRows, normalizedRows);
+    return calcManureN2O(livestockRows, normalizedRows);
   }, [watchedRows, livestockRows]);
 
   const inputClass =
@@ -124,22 +121,21 @@ export default function ManureCH4Page() {
     "w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-700";
   const errorClass = "mt-2 text-sm text-red-600";
 
-  const onSubmit = (values: ManureCH4FormValues) => {
-    const rows: ManureCH4Record[] = values.rows.map((row) => ({
+  const onSubmit = (values: ManureN2OFormValues) => {
+    const rows: ManureN2ORecord[] = values.rows.map((row) => ({
       sourceLivestockIndex: row.sourceLivestockIndex,
       species: row.species.trim(),
       stage: row.stage.trim(),
       method: "manualInput",
       managementSystem: row.managementSystem.trim(),
       sharePercent: row.sharePercent,
-      vsKgPerHeadPerDay: row.vsKgPerHeadPerDay,
-      boM3PerKgVS: row.boM3PerKgVS,
-      mcfPercent: row.mcfPercent,
+      nexKgNPerHeadYear: row.nexKgNPerHeadYear,
+      ef3KgN2ONPerKgN: row.ef3KgN2ONPerKgN,
       notes: row.notes.trim() ? row.notes.trim() : undefined,
     }));
 
-    saveManureCH4Draft(rows);
-    setStatusMessage("已保存粪污管理 CH4 草稿。");
+    saveManureN2ODraft(rows);
+    setStatusMessage("已保存粪污管理 N2O 草稿。");
   };
 
   if (livestockRows.length === 0) {
@@ -149,7 +145,7 @@ export default function ManureCH4Page() {
           <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
             <h1 className="text-2xl font-bold">还没有养殖活动数据</h1>
             <p className="mt-3 text-slate-600">
-              先完成“基础信息”和“养殖活动数据”这两步，再进入粪污管理 CH4 模块。
+              先完成“基础信息”和“养殖活动数据”这两步，再进入粪污管理 N2O 模块。
             </p>
             <div className="mt-6 flex gap-3">
               <Link
@@ -176,9 +172,9 @@ export default function ManureCH4Page() {
       <div className="mx-auto max-w-6xl px-6 py-12">
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-slate-500">Manure CH4</p>
+            <p className="text-sm font-medium text-slate-500">Manure N2O</p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight">
-              粪污管理 CH4
+              粪污管理 N2O
             </h1>
             <p className="mt-3 text-sm leading-7 text-slate-600">
               当前项目：{projectName || "未命名项目"}
@@ -187,10 +183,10 @@ export default function ManureCH4Page() {
 
           <div className="flex gap-3">
             <Link
-              href="/project/enteric"
+              href="/project/manure-ch4"
               className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
             >
-              返回肠道发酵 CH4
+              返回粪污管理 CH4
             </Link>
             <Link
               href="/"
@@ -217,8 +213,8 @@ export default function ManureCH4Page() {
                 const rowPreview = calculationPreview.rows[index];
                 const annualHead = rowPreview?.annualAverageHead ?? 0;
                 const factorPerHead =
-                  rowPreview?.emissionFactorKgPerHeadYear ?? 0;
-                const rowTotal = rowPreview?.rowCH4TPerYear ?? 0;
+                  rowPreview?.emissionFactorKgN2OPerHeadYear ?? 0;
+                const rowTotal = rowPreview?.rowN2OTPerYear ?? 0;
 
                 return (
                   <div
@@ -253,9 +249,8 @@ export default function ManureCH4Page() {
                               method: "manualInput",
                               managementSystem: "",
                               sharePercent: 0,
-                              vsKgPerHeadPerDay: 0,
-                              boM3PerKgVS: 0,
-                              mcfPercent: 0,
+                              nexKgNPerHeadYear: 0,
+                              ef3KgN2ONPerKgN: 0,
                               notes: "",
                             })
                           }
@@ -318,7 +313,7 @@ export default function ManureCH4Page() {
                         <input
                           {...register(`rows.${index}.managementSystem`)}
                           className={inputClass}
-                          placeholder="例如：液态/浆态贮存"
+                          placeholder="例如：固体贮存"
                         />
                         {errors.rows?.[index]?.managementSystem?.message ? (
                           <p className={errorClass}>
@@ -351,21 +346,21 @@ export default function ManureCH4Page() {
 
                       <label className="block">
                         <span className="mb-2 block text-sm font-medium text-slate-700">
-                          VS（kg/head/day）
+                          Nex（kg N/head/year）
                         </span>
                         <input
                           type="number"
                           step="any"
-                          {...register(`rows.${index}.vsKgPerHeadPerDay`, {
+                          {...register(`rows.${index}.nexKgNPerHeadYear`, {
                             valueAsNumber: true,
                           })}
                           className={inputClass}
-                          placeholder="例如：2.8"
+                          placeholder="例如：80"
                         />
-                        {errors.rows?.[index]?.vsKgPerHeadPerDay?.message ? (
+                        {errors.rows?.[index]?.nexKgNPerHeadYear?.message ? (
                           <p className={errorClass}>
                             {String(
-                              errors.rows[index]?.vsKgPerHeadPerDay?.message
+                              errors.rows[index]?.nexKgNPerHeadYear?.message
                             )}
                           </p>
                         ) : null}
@@ -373,40 +368,22 @@ export default function ManureCH4Page() {
 
                       <label className="block">
                         <span className="mb-2 block text-sm font-medium text-slate-700">
-                          B₀（m³ CH4/kg VS）
+                          EF3（kg N2O-N/kg N）
                         </span>
                         <input
                           type="number"
                           step="any"
-                          {...register(`rows.${index}.boM3PerKgVS`, {
+                          {...register(`rows.${index}.ef3KgN2ONPerKgN`, {
                             valueAsNumber: true,
                           })}
                           className={inputClass}
-                          placeholder="例如：0.24"
+                          placeholder="例如：0.005"
                         />
-                        {errors.rows?.[index]?.boM3PerKgVS?.message ? (
+                        {errors.rows?.[index]?.ef3KgN2ONPerKgN?.message ? (
                           <p className={errorClass}>
-                            {String(errors.rows[index]?.boM3PerKgVS?.message)}
-                          </p>
-                        ) : null}
-                      </label>
-
-                      <label className="block">
-                        <span className="mb-2 block text-sm font-medium text-slate-700">
-                          MCF（%）
-                        </span>
-                        <input
-                          type="number"
-                          step="any"
-                          {...register(`rows.${index}.mcfPercent`, {
-                            valueAsNumber: true,
-                          })}
-                          className={inputClass}
-                          placeholder="例如：35"
-                        />
-                        {errors.rows?.[index]?.mcfPercent?.message ? (
-                          <p className={errorClass}>
-                            {String(errors.rows[index]?.mcfPercent?.message)}
+                            {String(
+                              errors.rows[index]?.ef3KgN2ONPerKgN?.message
+                            )}
                           </p>
                         ) : null}
                       </label>
@@ -416,7 +393,7 @@ export default function ManureCH4Page() {
                           每头年排放因子预览
                         </span>
                         <div className={readonlyClass}>
-                          {factorPerHead.toFixed(3)} kg CH4/head/yr
+                          {factorPerHead.toFixed(3)} kg N2O/head/yr
                         </div>
                       </label>
                     </div>
@@ -439,7 +416,7 @@ export default function ManureCH4Page() {
                     </label>
 
                     <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                      该路径年度 CH4 预览：{rowTotal.toFixed(3)} t CH4/yr
+                      该路径年度 N2O 预览：{rowTotal.toFixed(3)} t N2O/yr
                     </div>
                   </div>
                 );
@@ -457,8 +434,8 @@ export default function ManureCH4Page() {
             <h2 className="text-lg font-semibold">2. 占比校验与汇总</h2>
             <div className="mt-3 space-y-2 text-sm text-slate-600">
               <p>
-                当前年度 CH4 预览总量：
-                {calculationPreview.totalCH4TPerYear.toFixed(3)} t CH4/yr
+                当前年度 N2O 预览总量：
+                {calculationPreview.totalN2OTPerYear.toFixed(3)} t N2O/yr
               </p>
               <p>保存方式：浏览器本地草稿</p>
               {statusMessage ? (
@@ -478,7 +455,7 @@ export default function ManureCH4Page() {
                       合计因子
                     </th>
                     <th className="border-b border-slate-200 px-3 py-2">
-                      t CH4/yr
+                      t N2O/yr
                     </th>
                   </tr>
                 </thead>
@@ -506,10 +483,10 @@ export default function ManureCH4Page() {
                         )}
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
-                        {group.emissionFactorKgPerHeadYear.toFixed(3)} kg/head/yr
+                        {group.emissionFactorKgN2OPerHeadYear.toFixed(3)} kg/head/yr
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
-                        {group.totalCH4TPerYear.toFixed(3)}
+                        {group.totalN2OTPerYear.toFixed(3)}
                       </td>
                     </tr>
                   ))}
@@ -529,11 +506,11 @@ export default function ManureCH4Page() {
                     <th className="border-b border-slate-200 px-3 py-2">阶段</th>
                     <th className="border-b border-slate-200 px-3 py-2">管理方式</th>
                     <th className="border-b border-slate-200 px-3 py-2">占比</th>
-                    <th className="border-b border-slate-200 px-3 py-2">VS</th>
-                    <th className="border-b border-slate-200 px-3 py-2">B₀</th>
-                    <th className="border-b border-slate-200 px-3 py-2">MCF</th>
+                    <th className="border-b border-slate-200 px-3 py-2">Nex</th>
+                    <th className="border-b border-slate-200 px-3 py-2">EF3</th>
+                    <th className="border-b border-slate-200 px-3 py-2">管理氮量</th>
                     <th className="border-b border-slate-200 px-3 py-2">因子</th>
-                    <th className="border-b border-slate-200 px-3 py-2">t CH4/yr</th>
+                    <th className="border-b border-slate-200 px-3 py-2">t N2O/yr</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -552,19 +529,19 @@ export default function ManureCH4Page() {
                         {row.sharePercent.toFixed(2)}%
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
-                        {row.vsKgPerHeadPerDay.toFixed(3)}
+                        {row.nexKgNPerHeadYear.toFixed(3)}
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
-                        {row.boM3PerKgVS.toFixed(3)}
+                        {row.ef3KgN2ONPerKgN.toFixed(4)}
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
-                        {row.mcfPercent.toFixed(2)}%
+                        {row.managedNitrogenKgPerYear.toFixed(2)} kg N/yr
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
-                        {row.emissionFactorKgPerHeadYear.toFixed(3)} kg/head/yr
+                        {row.emissionFactorKgN2OPerHeadYear.toFixed(3)} kg/head/yr
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
-                        {row.rowCH4TPerYear.toFixed(3)}
+                        {row.rowN2OTPerYear.toFixed(3)}
                       </td>
                     </tr>
                   ))}
@@ -579,22 +556,23 @@ export default function ManureCH4Page() {
               disabled={isSubmitting}
               className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
-              {isSubmitting ? "保存中..." : "保存粪污管理 CH4 草稿"}
+              {isSubmitting ? "保存中..." : "保存粪污管理 N2O 草稿"}
             </button>
 
             <Link
-              href="/project/enteric"
+              href="/project/manure-ch4"
               className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
             >
               返回上一页
             </Link>
 
-            <Link
-              href="/project/manure-n2o"
-              className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
+            <button
+              type="button"
+              disabled
+              className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-400"
             >
-              下一步：粪污管理 N2O
-            </Link>
+              下一步：能源与电力模块（待开发）
+            </button>
           </div>
         </form>
       </div>

@@ -19,6 +19,8 @@ export type ModuleKey =
   | "exportedEnergy";
 
 export type EntericMethod = "defaultEF" | "customEF";
+export type ManureCH4Method = "manualInput";
+export type ManureN2OMethod = "manualInput";
 
 export interface ProjectBase {
   enterpriseName: string;
@@ -47,6 +49,31 @@ export interface EntericRecord {
   notes?: string;
 }
 
+export interface ManureCH4Record {
+  sourceLivestockIndex: number;
+  species: string;
+  stage: string;
+  method: ManureCH4Method;
+  managementSystem: string;
+  sharePercent: number;
+  vsKgPerHeadPerDay: number;
+  boM3PerKgVS: number;
+  mcfPercent: number;
+  notes?: string;
+}
+
+export interface ManureN2ORecord {
+  sourceLivestockIndex: number;
+  species: string;
+  stage: string;
+  method: ManureN2OMethod;
+  managementSystem: string;
+  sharePercent: number;
+  nexKgNPerHeadYear: number;
+  ef3KgN2ONPerKgN: number;
+  notes?: string;
+}
+
 export interface FactorReference {
   standardVersion: StandardVersion;
   sourceTable: string;
@@ -71,6 +98,8 @@ export interface ProjectDraft {
   base: ProjectBase;
   livestock: LivestockRecord[];
   enteric?: EntericRecord[];
+  manureCH4?: ManureCH4Record[];
+  manureN2O?: ManureN2ORecord[];
   createdAt: string;
   updatedAt: string;
 }
