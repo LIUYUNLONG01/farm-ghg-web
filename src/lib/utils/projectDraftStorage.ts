@@ -1,29 +1,33 @@
-import type { ProjectBaseFormValues } from "@/lib/schemas/projectBase";
 import type {
   EnergyBalanceRecord,
   EntericRecord,
+  FeedLedgerRecord,
   FuelCombustionRecord,
   LivestockRecord,
   ManureCH4Record,
   ManureN2ORecord,
+  ProjectBase,
   ProjectDraft,
 } from "@/types/ghg";
 
-const PROJECT_DRAFT_KEY = "farm-ghg-project-draft";
+const STORAGE_KEY = "farm-ghg-project-draft";
 
-function getDefaultDraft(): ProjectDraft {
-  const now = new Date().toISOString();
+function nowIso() {
+  return new Date().toISOString();
+}
 
+function createEmptyDraft(): ProjectDraft {
   return {
     base: {
       enterpriseName: "",
       year: new Date().getFullYear(),
-      region: "",
-      farmType: "其他",
+      region: "北京",
+      farmType: "奶牛场",
       standardVersion: "NYT4243_2022",
-      notes: undefined,
+      notes: "",
     },
     livestock: [],
+    feedLedger: [],
     enteric: [],
     manureCH4: [],
     manureN2O: [],
@@ -38,150 +42,113 @@ function getDefaultDraft(): ProjectDraft {
       exportedHeatGJ: 0,
       exportedHeatEFtCO2PerGJ: 0,
     },
-    createdAt: now,
-    updatedAt: now,
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
   };
+}
+
+function readDraft(): ProjectDraft {
+  if (typeof window === "undefined") {
+    return createEmptyDraft();
+  }
+
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  if (!raw) {
+    return createEmptyDraft();
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<ProjectDraft>;
+
+    return {
+      ...createEmptyDraft(),
+      ...parsed,
+      base: {
+        ...createEmptyDraft().base,
+        ...(parsed.base ?? {}),
+      },
+      livestock: parsed.livestock ?? [],
+      feedLedger: parsed.feedLedger ?? [],
+      enteric: parsed.enteric ?? [],
+      manureCH4: parsed.manureCH4 ?? [],
+      manureN2O: parsed.manureN2O ?? [],
+      energyFuel: parsed.energyFuel ?? [],
+      energyBalance: {
+        ...createEmptyDraft().energyBalance,
+        ...(parsed.energyBalance ?? {}),
+      },
+      createdAt: parsed.createdAt ?? nowIso(),
+      updatedAt: parsed.updatedAt ?? nowIso(),
+    };
+  } catch {
+    return createEmptyDraft();
+  }
+}
+
+function writeDraft(draft: ProjectDraft) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+}
+
+function updateDraft(patch: Partial<ProjectDraft>) {
+  const current = readDraft();
+  const next: ProjectDraft = {
+    ...current,
+    ...patch,
+    base: patch.base ? { ...current.base, ...patch.base } : current.base,
+    energyBalance: patch.energyBalance
+      ? { ...current.energyBalance, ...patch.energyBalance }
+      : current.energyBalance,
+    updatedAt: nowIso(),
+  };
+  writeDraft(next);
+  return next;
 }
 
 export function loadProjectDraft(): ProjectDraft | null {
   if (typeof window === "undefined") return null;
-
-  const raw = window.localStorage.getItem(PROJECT_DRAFT_KEY);
-  if (!raw) return null;
-
-  try {
-    return JSON.parse(raw) as ProjectDraft;
-  } catch {
-    return null;
-  }
+  return readDraft();
 }
 
-export function saveProjectDraft(base: ProjectBaseFormValues): ProjectDraft {
-  const now = new Date().toISOString();
-  const existing = loadProjectDraft() ?? getDefaultDraft();
-
-  const draft: ProjectDraft = {
-    base: {
-      enterpriseName: base.enterpriseName,
-      year: base.year,
-      region: base.region,
-      farmType: base.farmType,
-      standardVersion: base.standardVersion,
-      notes: base.notes.trim() ? base.notes.trim() : undefined,
-    },
-    livestock: existing.livestock ?? [],
-    enteric: existing.enteric ?? [],
-    manureCH4: existing.manureCH4 ?? [],
-    manureN2O: existing.manureN2O ?? [],
-    energyFuel: existing.energyFuel ?? [],
-    energyBalance: existing.energyBalance ?? getDefaultDraft().energyBalance,
-    createdAt: existing.createdAt ?? now,
-    updatedAt: now,
-  };
-
-  window.localStorage.setItem(PROJECT_DRAFT_KEY, JSON.stringify(draft));
-  return draft;
+export function saveProjectDraft(base: ProjectBase) {
+  return updateDraft({ base });
 }
 
-export function saveLivestockDraft(rows: LivestockRecord[]): ProjectDraft {
-  const now = new Date().toISOString();
-  const existing = loadProjectDraft() ?? getDefaultDraft();
-
-  const draft: ProjectDraft = {
-    base: existing.base,
+export function saveLivestockDraft(
+  rows: LivestockRecord[],
+  feedLedger?: FeedLedgerRecord[]
+) {
+  return updateDraft({
     livestock: rows,
-    enteric: existing.enteric ?? [],
-    manureCH4: existing.manureCH4 ?? [],
-    manureN2O: existing.manureN2O ?? [],
-    energyFuel: existing.energyFuel ?? [],
-    energyBalance: existing.energyBalance ?? getDefaultDraft().energyBalance,
-    createdAt: existing.createdAt ?? now,
-    updatedAt: now,
-  };
-
-  window.localStorage.setItem(PROJECT_DRAFT_KEY, JSON.stringify(draft));
-  return draft;
+    ...(feedLedger ? { feedLedger } : {}),
+  });
 }
 
-export function saveEntericDraft(rows: EntericRecord[]): ProjectDraft {
-  const now = new Date().toISOString();
-  const existing = loadProjectDraft() ?? getDefaultDraft();
-
-  const draft: ProjectDraft = {
-    base: existing.base,
-    livestock: existing.livestock ?? [],
-    enteric: rows,
-    manureCH4: existing.manureCH4 ?? [],
-    manureN2O: existing.manureN2O ?? [],
-    energyFuel: existing.energyFuel ?? [],
-    energyBalance: existing.energyBalance ?? getDefaultDraft().energyBalance,
-    createdAt: existing.createdAt ?? now,
-    updatedAt: now,
-  };
-
-  window.localStorage.setItem(PROJECT_DRAFT_KEY, JSON.stringify(draft));
-  return draft;
+export function saveFeedLedgerDraft(feedLedger: FeedLedgerRecord[]) {
+  return updateDraft({ feedLedger });
 }
 
-export function saveManureCH4Draft(rows: ManureCH4Record[]): ProjectDraft {
-  const now = new Date().toISOString();
-  const existing = loadProjectDraft() ?? getDefaultDraft();
-
-  const draft: ProjectDraft = {
-    base: existing.base,
-    livestock: existing.livestock ?? [],
-    enteric: existing.enteric ?? [],
-    manureCH4: rows,
-    manureN2O: existing.manureN2O ?? [],
-    energyFuel: existing.energyFuel ?? [],
-    energyBalance: existing.energyBalance ?? getDefaultDraft().energyBalance,
-    createdAt: existing.createdAt ?? now,
-    updatedAt: now,
-  };
-
-  window.localStorage.setItem(PROJECT_DRAFT_KEY, JSON.stringify(draft));
-  return draft;
+export function saveEntericDraft(rows: EntericRecord[]) {
+  return updateDraft({ enteric: rows });
 }
 
-export function saveManureN2ODraft(rows: ManureN2ORecord[]): ProjectDraft {
-  const now = new Date().toISOString();
-  const existing = loadProjectDraft() ?? getDefaultDraft();
-
-  const draft: ProjectDraft = {
-    base: existing.base,
-    livestock: existing.livestock ?? [],
-    enteric: existing.enteric ?? [],
-    manureCH4: existing.manureCH4 ?? [],
-    manureN2O: rows,
-    energyFuel: existing.energyFuel ?? [],
-    energyBalance: existing.energyBalance ?? getDefaultDraft().energyBalance,
-    createdAt: existing.createdAt ?? now,
-    updatedAt: now,
-  };
-
-  window.localStorage.setItem(PROJECT_DRAFT_KEY, JSON.stringify(draft));
-  return draft;
+export function saveManureCH4Draft(rows: ManureCH4Record[]) {
+  return updateDraft({ manureCH4: rows });
 }
 
-export function saveEnergyDraft(
-  fuelRows: FuelCombustionRecord[],
-  energyBalance: EnergyBalanceRecord
-): ProjectDraft {
-  const now = new Date().toISOString();
-  const existing = loadProjectDraft() ?? getDefaultDraft();
+export function saveManureN2ODraft(rows: ManureN2ORecord[]) {
+  return updateDraft({ manureN2O: rows });
+}
 
-  const draft: ProjectDraft = {
-    base: existing.base,
-    livestock: existing.livestock ?? [],
-    enteric: existing.enteric ?? [],
-    manureCH4: existing.manureCH4 ?? [],
-    manureN2O: existing.manureN2O ?? [],
-    energyFuel: fuelRows,
-    energyBalance,
-    createdAt: existing.createdAt ?? now,
-    updatedAt: now,
-  };
+export function saveEnergyFuelDraft(rows: FuelCombustionRecord[]) {
+  return updateDraft({ energyFuel: rows });
+}
 
-  window.localStorage.setItem(PROJECT_DRAFT_KEY, JSON.stringify(draft));
-  return draft;
+export function saveEnergyBalanceDraft(balance: EnergyBalanceRecord) {
+  return updateDraft({ energyBalance: balance });
+}
+
+export function clearProjectDraft() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(STORAGE_KEY);
 }

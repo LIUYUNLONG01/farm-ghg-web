@@ -26,6 +26,9 @@ export function calcEnergyBalance(
     safeNumber(input.purchasedHeatGJ) *
     safeNumber(input.purchasedHeatEFtCO2PerGJ);
 
+  const totalPurchasedTCO2 =
+    purchasedElectricityTCO2 + purchasedHeatTCO2;
+
   const exportedElectricityTCO2 =
     safeNumber(input.exportedElectricityMWh) *
     safeNumber(input.exportedElectricityEFtCO2PerMWh);
@@ -34,8 +37,9 @@ export function calcEnergyBalance(
     safeNumber(input.exportedHeatGJ) *
     safeNumber(input.exportedHeatEFtCO2PerGJ);
 
-  const totalPurchasedTCO2 = purchasedElectricityTCO2 + purchasedHeatTCO2;
-  const totalExportedTCO2 = exportedElectricityTCO2 + exportedHeatTCO2;
+  const totalExportedTCO2 =
+    exportedElectricityTCO2 + exportedHeatTCO2;
+
   const netPurchasedTCO2 = totalPurchasedTCO2 - totalExportedTCO2;
 
   return {

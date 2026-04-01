@@ -18,15 +18,54 @@ export type ModuleKey =
   | "purchasedEnergy"
   | "exportedEnergy";
 
-export type EntericMethod = "defaultEF" | "customEF";
-export type ManureCH4Method = "manualInput";
-export type ManureN2OMethod = "manualInput";
-export type ParameterSource = "defaultLibrary" | "fuelPreset" | "manual";
+export type EntericActivityDataMethod =
+  | "annualAveragePopulation"
+  | "monthlyAveragePopulation"
+  | "turnoverCalculation";
 
-export interface ParameterMeta {
-  parameterSource: ParameterSource;
+export type EntericMethod =
+  | "defaultEF"
+  | "calculatedEF"
+  | "measuredEF"
+  | "customEF";
+
+export type ManureCH4Method = "regionalDefaultEF" | "parameterCalculation";
+export type ManureN2OMethod = "regionalDefaultEF" | "parameterCalculation";
+
+export type ParameterSourceType =
+  | "default_library"
+  | "manual_input"
+  | "preset_template";
+
+export type LivestockProductionPurpose =
+  | "泌乳"
+  | "后备"
+  | "育肥"
+  | "繁殖"
+  | "公牛"
+  | "其它";
+
+export type LivestockPopulationMode = "static" | "turnover";
+
+export type DMIAcquisitionMethod =
+  | "direct_input"
+  | "feed_ledger"
+  | "temporary_estimate"
+  | "model_nema_placeholder"
+  | "model_de_placeholder";
+
+export type FeedingSituation =
+  | "舍饲"
+  | "放牧"
+  | "大面积放牧"
+  | "混合饲养";
+
+export type FeedLedgerDirection = "inbound" | "outbound";
+export type FeedSourceType = "外购" | "自产" | "未知";
+
+export interface ParameterSourceMeta {
+  parameterSourceType: ParameterSourceType;
   parameterSourceLabel: string;
-  isOverridden: boolean;
 }
 
 export interface ProjectBase {
@@ -38,50 +77,134 @@ export interface ProjectBase {
   notes?: string;
 }
 
+export interface LivestockMonthlyChangeRecord {
+  month: number;
+  openingHead: number;
+  births: number;
+  transferredIn: number;
+  purchasedIn: number;
+  culled: number;
+  sold: number;
+  transferredOut: number;
+  deaths: number;
+  closingHead: number;
+}
+
 export interface LivestockRecord {
   species: string;
   stage: string;
+
+  productionPurpose?: LivestockProductionPurpose;
+  populationMode?: LivestockPopulationMode;
+
   annualAverageHead: number;
   annualOutputHead?: number;
   feedingDays?: number;
+
+  monthlyRecords?: LivestockMonthlyChangeRecord[];
+
+  openingWeightKg?: number;
+  closingWeightKg?: number;
+  averageDailyGainKg?: number;
+  matureWeightKg?: number;
+
+  milkYieldKgPerYear?: number;
+  milkFatPercent?: number;
+  pregnancyRatePercent?: number;
+  feedingSituation?: FeedingSituation;
+
+  dmiMethod?: DMIAcquisitionMethod;
+  dmiKgPerHeadDay?: number;
+  dePercent?: number;
+  nemaMJPerKgDM?: number;
+
+  notes?: string;
 }
 
-export interface EntericRecord extends ParameterMeta {
+export interface FeedLedgerRecord {
+  id: string;
+  direction: FeedLedgerDirection;
+  feedName: string;
+  moisturePercent: number;
+  recordDate: string;
+  targetGroupSourceLivestockIndex?: number;
+  quantityTon: number;
+  responsiblePerson?: string;
+  feedSourceType?: FeedSourceType;
+  notes?: string;
+}
+
+export interface EntericRecord extends ParameterSourceMeta {
   sourceLivestockIndex: number;
   species: string;
   stage: string;
+
+  activityDataMethod?: EntericActivityDataMethod;
+
+  annualAveragePopulation?: number;
+
+  janHead?: number;
+  febHead?: number;
+  marHead?: number;
+  aprHead?: number;
+  mayHead?: number;
+  junHead?: number;
+  julHead?: number;
+  augHead?: number;
+  sepHead?: number;
+  octHead?: number;
+  novHead?: number;
+  decHead?: number;
+
+  annualThroughput?: number;
+  daysAlive?: number;
+
   method: EntericMethod;
+
   emissionFactor: number;
+
+  dmiKgPerHeadDay?: number;
+  ymPercent?: number;
+  geMJPerHeadDay?: number;
+
   unit: "kg CH4/head/year";
   notes?: string;
 }
 
-export interface ManureCH4Record extends ParameterMeta {
+export interface ManureCH4Record extends ParameterSourceMeta {
   sourceLivestockIndex: number;
   species: string;
   stage: string;
   method: ManureCH4Method;
-  managementSystem: string;
-  sharePercent: number;
-  vsKgPerHeadPerDay: number;
-  boM3PerKgVS: number;
-  mcfPercent: number;
+
+  regionalEmissionFactor?: number;
+
+  managementSystem?: string;
+  sharePercent?: number;
+  vsKgPerHeadPerDay?: number;
+  boM3PerKgVS?: number;
+  mcfPercent?: number;
+
   notes?: string;
 }
 
-export interface ManureN2ORecord extends ParameterMeta {
+export interface ManureN2ORecord extends ParameterSourceMeta {
   sourceLivestockIndex: number;
   species: string;
   stage: string;
   method: ManureN2OMethod;
-  managementSystem: string;
-  sharePercent: number;
-  nexKgNPerHeadYear: number;
-  ef3KgN2ONPerKgN: number;
+
+  regionalEmissionFactor?: number;
+
+  managementSystem?: string;
+  sharePercent?: number;
+  nexKgNPerHeadYear?: number;
+  ef3KgN2ONPerKgN?: number;
+
   notes?: string;
 }
 
-export interface FuelCombustionRecord extends ParameterMeta {
+export interface FuelCombustionRecord extends ParameterSourceMeta {
   fuelType: string;
   consumptionAmount: number;
   ncvTJPerUnit: number;
@@ -124,6 +247,7 @@ export interface ModuleResult {
 export interface ProjectDraft {
   base: ProjectBase;
   livestock: LivestockRecord[];
+  feedLedger?: FeedLedgerRecord[];
   enteric?: EntericRecord[];
   manureCH4?: ManureCH4Record[];
   manureN2O?: ManureN2ORecord[];

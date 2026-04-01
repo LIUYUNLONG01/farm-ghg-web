@@ -133,12 +133,13 @@ export default function ChecksPage() {
           </section>
 
           <section className={`${cardClass} xl:col-span-3`}>
-            <h2 className="text-lg font-semibold">2. 使用建议</h2>
-            <ul className="mt-4 space-y-2 text-sm text-slate-600">
-              <li>1. 先处理“错误”项，再决定是否导出。</li>
-              <li>2. “提醒”项不一定阻止导出，但通常意味着结果完整性仍有提升空间。</li>
-              <li>3. 如果某个模块在你的项目中确实不适用，可以保留提醒，但最好在报告备注里说明原因。</li>
-            </ul>
+            <h2 className="text-lg font-semibold">2. 当前检查重点</h2>
+            <div className="mt-4 space-y-2 text-sm text-slate-600">
+              <p>1. 养殖活动页是否已形成完整的群体记录与 12 个月动态。</p>
+              <p>2. 如果某群体选择“饲料台账反推 DMI”，是否已绑定对应的出库饲料记录。</p>
+              <p>3. enteric 计算法是否已拿到有效 DMI 与 Ym。</p>
+              <p>4. manure CH4 / N2O 的参数法路径，占比是否已闭合到 100%。</p>
+            </div>
           </section>
         </div>
 
@@ -201,7 +202,7 @@ export default function ChecksPage() {
             href="/project/report"
             className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
           >
-            去报告导出页
+            去报告页
           </Link>
         </div>
       </div>

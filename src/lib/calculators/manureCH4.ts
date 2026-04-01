@@ -4,12 +4,14 @@ export interface ManureCH4RowResult {
   sourceLivestockIndex: number;
   species: string;
   stage: string;
+  method: string;
   managementSystem: string;
   annualAverageHead: number;
   sharePercent: number;
   vsKgPerHeadPerDay: number;
   boM3PerKgVS: number;
   mcfPercent: number;
+  regionalEmissionFactor: number;
   emissionFactorKgPerHeadYear: number;
   rowCH4KgPerYear: number;
   rowCH4TPerYear: number;
@@ -46,6 +48,30 @@ export function calcManureCH4(
   const rows: ManureCH4RowResult[] = manureRows.map((row) => {
     const livestock = livestockRows[row.sourceLivestockIndex];
     const annualAverageHead = safeNumber(livestock?.annualAverageHead);
+
+    if (row.method === "regionalDefaultEF") {
+      const regionalEmissionFactor = safeNumber(row.regionalEmissionFactor);
+      const rowCH4KgPerYear = annualAverageHead * regionalEmissionFactor;
+      const rowCH4TPerYear = rowCH4KgPerYear / 1000;
+
+      return {
+        sourceLivestockIndex: row.sourceLivestockIndex,
+        species: row.species,
+        stage: row.stage,
+        method: row.method,
+        managementSystem: "区域化推荐因子法",
+        annualAverageHead,
+        sharePercent: 100,
+        vsKgPerHeadPerDay: 0,
+        boM3PerKgVS: 0,
+        mcfPercent: 0,
+        regionalEmissionFactor,
+        emissionFactorKgPerHeadYear: regionalEmissionFactor,
+        rowCH4KgPerYear,
+        rowCH4TPerYear,
+      };
+    }
+
     const sharePercent = safeNumber(row.sharePercent);
     const vsKgPerHeadPerDay = safeNumber(row.vsKgPerHeadPerDay);
     const boM3PerKgVS = safeNumber(row.boM3PerKgVS);
@@ -66,12 +92,14 @@ export function calcManureCH4(
       sourceLivestockIndex: row.sourceLivestockIndex,
       species: row.species,
       stage: row.stage,
-      managementSystem: row.managementSystem,
+      method: row.method,
+      managementSystem: row.managementSystem ?? "",
       annualAverageHead,
       sharePercent,
       vsKgPerHeadPerDay,
       boM3PerKgVS,
       mcfPercent,
+      regionalEmissionFactor: 0,
       emissionFactorKgPerHeadYear,
       rowCH4KgPerYear,
       rowCH4TPerYear,
@@ -89,26 +117,33 @@ export function calcManureCH4(
         species: row.species,
         stage: row.stage,
         annualAverageHead: row.annualAverageHead,
-        shareTotalPercent: row.sharePercent,
+        shareTotalPercent:
+          row.method === "regionalDefaultEF" ? 100 : row.sharePercent,
         emissionFactorKgPerHeadYear: row.emissionFactorKgPerHeadYear,
         totalCH4KgPerYear: row.rowCH4KgPerYear,
         totalCH4TPerYear: row.rowCH4TPerYear,
-        isShareBalanced: false,
+        isShareBalanced: row.method === "regionalDefaultEF",
       });
       continue;
     }
 
-    existing.shareTotalPercent += row.sharePercent;
+    existing.shareTotalPercent +=
+      row.method === "regionalDefaultEF" ? 100 : row.sharePercent;
     existing.emissionFactorKgPerHeadYear += row.emissionFactorKgPerHeadYear;
     existing.totalCH4KgPerYear += row.rowCH4KgPerYear;
     existing.totalCH4TPerYear += row.rowCH4TPerYear;
+
+    if (row.method === "regionalDefaultEF") {
+      existing.isShareBalanced = true;
+    }
   }
 
   const groups = Array.from(groupMap.values())
     .sort((a, b) => a.sourceLivestockIndex - b.sourceLivestockIndex)
     .map((group) => ({
       ...group,
-      isShareBalanced: Math.abs(group.shareTotalPercent - 100) < 0.5,
+      isShareBalanced:
+        group.isShareBalanced || Math.abs(group.shareTotalPercent - 100) < 0.5,
     }));
 
   const totalCH4KgPerYear = rows.reduce(

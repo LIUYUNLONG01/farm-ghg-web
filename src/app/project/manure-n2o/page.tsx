@@ -18,6 +18,8 @@ import {
   commonManagementSystemPresets,
   getManureN2ODefaultFactor,
   getParameterSourceDisplay,
+  getRegionalDirectN2OFactor,
+  resolveRegionGroup,
 } from "@/lib/utils/standardFactors";
 import type {
   LivestockRecord,
@@ -25,26 +27,18 @@ import type {
   StandardVersion,
 } from "@/types/ghg";
 
-function createRowFromLivestock(row: LivestockRecord, index: number) {
-  return {
-    sourceLivestockIndex: index,
-    species: row.species,
-    stage: row.stage,
-    method: "manualInput" as const,
-    managementSystem: "",
-    sharePercent: 100,
-    nexKgNPerHeadYear: 0,
-    ef3KgN2ONPerKgN: 0,
-    parameterSourceType: "manual_input" as const,
-    parameterSourceLabel: "手工输入",
-    notes: "",
-  };
+function safeNumber(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function fmt(value: unknown, digits = 3): string {
+  return safeNumber(value).toFixed(digits);
 }
 
 function mergeNote(existing: string | undefined, incoming: string) {
   const left = (existing ?? "").trim();
   const right = incoming.trim();
-
   if (!left) return right;
   if (left.includes(right)) return left;
   return `${left}；${right}`;
@@ -60,10 +54,227 @@ function sourceBadgeClass(sourceType: string) {
   return "rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700";
 }
 
+function getLivestockDmiSourceLabel(row: LivestockRecord): string {
+  switch (row.dmiMethod) {
+    case "direct_input":
+      return "直接录入 DMI";
+    case "feed_ledger":
+      return "按饲料台账反推 DMI";
+    case "temporary_estimate":
+      return "经验值/台账估计";
+    case "model_nema_placeholder":
+      return "预留 NEma 模型估算";
+    case "model_de_placeholder":
+      return "预留 DE% 模型估算";
+    default:
+      return "未提供";
+  }
+}
+
+function getLivestockDmiValue(row: LivestockRecord): number | undefined {
+  const dmi = safeNumber(row.dmiKgPerHeadDay);
+  return dmi > 0 ? dmi : undefined;
+}
+
+function createRegionalRow(
+  row: LivestockRecord,
+  index: number,
+  standardVersion: StandardVersion,
+  projectRegion: string
+) {
+  const regional = getRegionalDirectN2OFactor(
+    standardVersion,
+    projectRegion,
+    row.species
+  );
+
+  return {
+    sourceLivestockIndex: index,
+    species: row.species,
+    stage: row.stage,
+    method: "regionalDefaultEF" as const,
+    regionalEmissionFactor: regional?.emissionFactor ?? 0,
+    managementSystem: "",
+    sharePercent: 100,
+    nexKgNPerHeadYear: 0,
+    ef3KgN2ONPerKgN: 0,
+    parameterSourceType: regional ? ("default_library" as const) : ("manual_input" as const),
+    parameterSourceLabel: regional
+      ? `${standardVersion} 表C.10：${regional.regionGroup} / ${row.species}`
+      : "待选择推荐因子或参数法",
+    notes: regional
+      ? `表C.10 区域化推荐因子已按初始化自动带入：${regional.regionGroup} / ${row.species}`
+      : "",
+  };
+}
+
+function createParameterRow(row: LivestockRecord, index: number) {
+  return {
+    sourceLivestockIndex: index,
+    species: row.species,
+    stage: row.stage,
+    method: "parameterCalculation" as const,
+    regionalEmissionFactor: undefined,
+    managementSystem: "",
+    sharePercent: 0,
+    nexKgNPerHeadYear: 0,
+    ef3KgN2ONPerKgN: 0,
+    parameterSourceType: "manual_input" as const,
+    parameterSourceLabel: "新增参数法路径",
+    notes: "",
+  };
+}
+
+function syncRowsWithLivestock(
+  livestockRows: LivestockRecord[],
+  existingRows: ManureN2ORecord[],
+  standardVersion: StandardVersion,
+  projectRegion: string
+) {
+  const nextRows: Array<{
+    sourceLivestockIndex: number;
+    species: string;
+    stage: string;
+    method: "regionalDefaultEF" | "parameterCalculation";
+    regionalEmissionFactor?: number;
+    managementSystem: string;
+    sharePercent: number;
+    nexKgNPerHeadYear: number;
+    ef3KgN2ONPerKgN: number;
+    parameterSourceType: "default_library" | "manual_input" | "preset_template";
+    parameterSourceLabel: string;
+    notes: string;
+  }> = [];
+
+  livestockRows.forEach((livestockRow, sourceIndex) => {
+    const rowsForSource = existingRows.filter(
+      (item) => item.sourceLivestockIndex === sourceIndex
+    );
+
+    if (rowsForSource.length === 0) {
+      nextRows.push(
+        createRegionalRow(
+          livestockRow,
+          sourceIndex,
+          standardVersion,
+          projectRegion
+        )
+      );
+      return;
+    }
+
+    const parameterRows = rowsForSource.filter(
+      (item) => item.method === "parameterCalculation"
+    );
+
+    if (parameterRows.length > 0) {
+      parameterRows.forEach((row) => {
+        const shouldRefreshDefaults =
+          row.parameterSourceType === "default_library" &&
+          row.managementSystem &&
+          row.managementSystem.trim() !== "";
+
+        if (shouldRefreshDefaults) {
+          const matched = getManureN2ODefaultFactor(
+            standardVersion,
+            livestockRow.species,
+            row.managementSystem ?? ""
+          );
+
+          if (matched) {
+            nextRows.push({
+              sourceLivestockIndex: sourceIndex,
+              species: livestockRow.species,
+              stage: livestockRow.stage,
+              method: "parameterCalculation",
+              regionalEmissionFactor: undefined,
+              managementSystem: row.managementSystem ?? "",
+              sharePercent: row.sharePercent ?? 0,
+              nexKgNPerHeadYear: matched.nexKgNPerHeadYear,
+              ef3KgN2ONPerKgN: matched.ef3KgN2ONPerKgN,
+              parameterSourceType: "default_library",
+              parameterSourceLabel: `${standardVersion} ${matched.sourceLabel}`,
+              notes: mergeNote(
+                row.notes,
+                `参数法默认值已按当前养殖活动口径重新同步：${matched.note}`
+              ),
+            });
+            return;
+          }
+        }
+
+        nextRows.push({
+          sourceLivestockIndex: sourceIndex,
+          species: livestockRow.species,
+          stage: livestockRow.stage,
+          method: "parameterCalculation",
+          regionalEmissionFactor: undefined,
+          managementSystem: row.managementSystem ?? "",
+          sharePercent: row.sharePercent ?? 0,
+          nexKgNPerHeadYear: row.nexKgNPerHeadYear ?? 0,
+          ef3KgN2ONPerKgN: row.ef3KgN2ONPerKgN ?? 0,
+          parameterSourceType: row.parameterSourceType ?? "manual_input",
+          parameterSourceLabel:
+            row.parameterSourceLabel ?? "参数法：待带入默认值或手工填写",
+          notes: row.notes ?? "",
+        });
+      });
+
+      return;
+    }
+
+    const regionalRow = rowsForSource[0];
+    const shouldRefreshDefault = regionalRow.parameterSourceType === "default_library";
+    const regional = shouldRefreshDefault
+      ? getRegionalDirectN2OFactor(
+          standardVersion,
+          projectRegion,
+          livestockRow.species
+        )
+      : null;
+
+    nextRows.push({
+      sourceLivestockIndex: sourceIndex,
+      species: livestockRow.species,
+      stage: livestockRow.stage,
+      method: "regionalDefaultEF",
+      regionalEmissionFactor: shouldRefreshDefault
+        ? regional?.emissionFactor ?? 0
+        : regionalRow.regionalEmissionFactor ?? 0,
+      managementSystem: "",
+      sharePercent: 100,
+      nexKgNPerHeadYear: 0,
+      ef3KgN2ONPerKgN: 0,
+      parameterSourceType: shouldRefreshDefault
+        ? regional
+          ? "default_library"
+          : "manual_input"
+        : regionalRow.parameterSourceType ?? "manual_input",
+      parameterSourceLabel: shouldRefreshDefault
+        ? regional
+          ? `${standardVersion} 表C.10：${regional.regionGroup} / ${livestockRow.species}`
+          : "未匹配区域化推荐因子，需手动填写"
+        : regionalRow.parameterSourceLabel ?? "手工输入",
+      notes: shouldRefreshDefault
+        ? regional
+          ? mergeNote(
+              regionalRow.notes,
+              `表C.10 区域化推荐因子已按当前养殖活动口径重新同步：${regional.regionGroup} / ${livestockRow.species}`
+            )
+          : regionalRow.notes ?? ""
+        : regionalRow.notes ?? "",
+    });
+  });
+
+  return nextRows;
+}
+
 export default function ManureN2OPage() {
   const [projectName, setProjectName] = useState("");
   const [standardVersion, setStandardVersion] =
     useState<StandardVersion>("NYT4243_2022");
+  const [projectRegion, setProjectRegion] = useState("");
+  const [regionGroup, setRegionGroup] = useState<string>("未识别");
   const [statusMessage, setStatusMessage] = useState("");
   const [livestockRows, setLivestockRows] = useState<LivestockRecord[]>([]);
 
@@ -82,7 +293,7 @@ export default function ManureN2OPage() {
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields } = useFieldArray({
     control,
     name: "rows",
   });
@@ -93,65 +304,76 @@ export default function ManureN2OPage() {
     const draft = loadProjectDraft();
     if (!draft) return;
 
+    const livestock = draft.livestock ?? [];
+    const manureDraft = draft.manureN2O ?? [];
+
     setProjectName(draft.base.enterpriseName || "未命名项目");
     setStandardVersion(draft.base.standardVersion);
-    setLivestockRows(draft.livestock ?? []);
+    setProjectRegion(draft.base.region || "");
+    setRegionGroup(resolveRegionGroup(draft.base.region || "") ?? "未识别");
+    setLivestockRows(livestock);
 
-    if (draft.manureN2O && draft.manureN2O.length > 0) {
-      reset({
-        rows: draft.manureN2O.map((row) => ({
-          sourceLivestockIndex: row.sourceLivestockIndex,
-          species: row.species,
-          stage: row.stage,
-          method: "manualInput" as const,
-          managementSystem: row.managementSystem,
-          sharePercent: row.sharePercent,
-          nexKgNPerHeadYear: row.nexKgNPerHeadYear,
-          ef3KgN2ONPerKgN: row.ef3KgN2ONPerKgN,
-          parameterSourceType: row.parameterSourceType ?? "manual_input",
-          parameterSourceLabel: row.parameterSourceLabel ?? "手工输入",
-          notes: row.notes ?? "",
-        })),
-      });
-      setStatusMessage("已加载浏览器中的粪污管理 N2O 草稿。");
-      return;
-    }
+    const syncedRows = syncRowsWithLivestock(
+      livestock,
+      manureDraft,
+      draft.base.standardVersion,
+      draft.base.region || ""
+    );
 
-    if (draft.livestock && draft.livestock.length > 0) {
-      reset({
-        rows: draft.livestock.map((row, index) =>
-          createRowFromLivestock(row, index)
-        ),
-      });
+    reset({
+      rows: syncedRows.map((row) => ({
+        sourceLivestockIndex: row.sourceLivestockIndex,
+        species: row.species,
+        stage: row.stage,
+        method: row.method,
+        regionalEmissionFactor: row.regionalEmissionFactor,
+        managementSystem: row.managementSystem,
+        sharePercent: row.sharePercent,
+        nexKgNPerHeadYear: row.nexKgNPerHeadYear,
+        ef3KgN2ONPerKgN: row.ef3KgN2ONPerKgN,
+        parameterSourceType: row.parameterSourceType,
+        parameterSourceLabel: row.parameterSourceLabel,
+        notes: row.notes,
+      })),
+    });
+
+    if (manureDraft.length > 0) {
+      setStatusMessage(
+        "已加载粪污管理 N2O 草稿，并按当前养殖活动数据重新同步了畜种和阶段。"
+      );
+    } else {
+      setStatusMessage("已按当前地区初始化粪污管理 N2O 模块。");
     }
   }, [reset]);
 
-  const calculationPreview = useMemo(() => {
-    if (!watchedRows || watchedRows.length === 0) {
-      return {
-        rows: [],
-        groups: [],
-        totalN2OKgPerYear: 0,
-        totalN2OTPerYear: 0,
-      };
-    }
-
-    const normalizedRows: ManureN2ORecord[] = watchedRows.map((row) => ({
+  const calculationPreview = calcManureN2O(
+    livestockRows,
+    watchedRows.map((row) => ({
       sourceLivestockIndex: row.sourceLivestockIndex,
       species: row.species,
       stage: row.stage,
-      method: "manualInput",
-      managementSystem: row.managementSystem,
-      sharePercent: Number(row.sharePercent ?? 0),
-      nexKgNPerHeadYear: Number(row.nexKgNPerHeadYear ?? 0),
-      ef3KgN2ONPerKgN: Number(row.ef3KgN2ONPerKgN ?? 0),
-      parameterSourceType: row.parameterSourceType ?? "manual_input",
-      parameterSourceLabel: row.parameterSourceLabel ?? "手工输入",
+      method: row.method,
+      regionalEmissionFactor: row.regionalEmissionFactor,
+      managementSystem: row.managementSystem?.trim()
+        ? row.managementSystem.trim()
+        : undefined,
+      sharePercent: row.sharePercent,
+      nexKgNPerHeadYear: row.nexKgNPerHeadYear,
+      ef3KgN2ONPerKgN: row.ef3KgN2ONPerKgN,
+      parameterSourceType: row.parameterSourceType,
+      parameterSourceLabel: row.parameterSourceLabel,
       notes: row.notes?.trim() ? row.notes.trim() : undefined,
-    }));
+    }))
+  );
 
-    return calcManureN2O(livestockRows, normalizedRows);
-  }, [watchedRows, livestockRows]);
+  const groupedIndexes = useMemo(() => {
+    return livestockRows.map((_, sourceIndex) =>
+      watchedRows
+        .map((row, index) => ({ row, index }))
+        .filter((item) => item.row.sourceLivestockIndex === sourceIndex)
+        .map((item) => item.index)
+    );
+  }, [livestockRows, watchedRows]);
 
   const inputClass =
     "w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500";
@@ -159,97 +381,199 @@ export default function ManureN2OPage() {
     "w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-700";
   const errorClass = "mt-2 text-sm text-red-600";
 
-  const applyDefaultsForRow = (index: number) => {
-    const row = watchedRows[index];
+  const replaceRowsForSource = (
+    sourceIndex: number,
+    nextRowsForSource: ManureN2OFormValues["rows"]
+  ) => {
+    const otherRows = watchedRows.filter(
+      (row) => row.sourceLivestockIndex !== sourceIndex
+    );
+
+    const nextRows = [...otherRows, ...nextRowsForSource].sort((a, b) => {
+      if (a.sourceLivestockIndex !== b.sourceLivestockIndex) {
+        return a.sourceLivestockIndex - b.sourceLivestockIndex;
+      }
+      return 0;
+    });
+
+    reset({ rows: nextRows });
+  };
+
+  const switchGroupToRegional = (sourceIndex: number) => {
+    const livestockRow = livestockRows[sourceIndex];
+    if (!livestockRow) return;
+
+    const nextRow = createRegionalRow(
+      livestockRow,
+      sourceIndex,
+      standardVersion,
+      projectRegion
+    );
+
+    replaceRowsForSource(sourceIndex, [nextRow]);
+    setStatusMessage(`第 ${sourceIndex + 1} 个畜种已切换为推荐因子法。`);
+  };
+
+  const switchGroupToParameter = (sourceIndex: number) => {
+    const livestockRow = livestockRows[sourceIndex];
+    if (!livestockRow) return;
+
+    const currentGroup = watchedRows.filter(
+      (row) => row.sourceLivestockIndex === sourceIndex
+    );
+    const currentParameterRows = currentGroup.filter(
+      (row) => row.method === "parameterCalculation"
+    );
+
+    if (currentParameterRows.length > 0) {
+      replaceRowsForSource(sourceIndex, currentParameterRows);
+      setStatusMessage(`第 ${sourceIndex + 1} 个畜种已切换为参数法。`);
+      return;
+    }
+
+    replaceRowsForSource(sourceIndex, [createParameterRow(livestockRow, sourceIndex)]);
+    setStatusMessage(`第 ${sourceIndex + 1} 个畜种已切换为参数法。`);
+  };
+
+  const addParameterPathForSource = (sourceIndex: number) => {
+    const livestockRow = livestockRows[sourceIndex];
+    if (!livestockRow) return;
+
+    const currentGroup = watchedRows.filter(
+      (row) => row.sourceLivestockIndex === sourceIndex
+    );
+    const parameterRows = currentGroup.filter(
+      (row) => row.method === "parameterCalculation"
+    );
+
+    const nextRowsForSource = [
+      ...parameterRows,
+      createParameterRow(livestockRow, sourceIndex),
+    ];
+
+    replaceRowsForSource(sourceIndex, nextRowsForSource);
+    setStatusMessage(`第 ${sourceIndex + 1} 个畜种已新增一条参数法路径。`);
+  };
+
+  const removeParameterPath = (sourceIndex: number, rowIndex: number) => {
+    const currentGroup = watchedRows.filter(
+      (row) => row.sourceLivestockIndex === sourceIndex
+    );
+    const parameterRows = currentGroup.filter(
+      (row) => row.method === "parameterCalculation"
+    );
+
+    if (parameterRows.length <= 1) {
+      setStatusMessage("至少保留一条参数法路径，或切换到推荐因子法。");
+      return;
+    }
+
+    const nextRowsForSource = currentGroup.filter((_, index) => {
+      const originalIndex = groupedIndexes[sourceIndex][index];
+      return originalIndex !== rowIndex;
+    });
+
+    replaceRowsForSource(sourceIndex, nextRowsForSource);
+    setStatusMessage(`已删除第 ${sourceIndex + 1} 个畜种的一条参数法路径。`);
+  };
+
+  const applyRegionalDefaultForSource = (sourceIndex: number) => {
+    const livestockRow = livestockRows[sourceIndex];
+    if (!livestockRow) return;
+
+    const matched = getRegionalDirectN2OFactor(
+      standardVersion,
+      projectRegion,
+      livestockRow.species
+    );
+
+    if (!matched) {
+      setStatusMessage(
+        `第 ${sourceIndex + 1} 个畜种未匹配到区域化推荐因子，请检查地区或动物类别。`
+      );
+      return;
+    }
+
+    const nextRow = createRegionalRow(
+      livestockRow,
+      sourceIndex,
+      standardVersion,
+      projectRegion
+    );
+
+    replaceRowsForSource(sourceIndex, [nextRow]);
+    setStatusMessage(`第 ${sourceIndex + 1} 个畜种已带入表 C.10 推荐因子。`);
+  };
+
+  const applyParameterDefaultForRow = (rowIndex: number) => {
+    const row = watchedRows[rowIndex];
     if (!row) return;
 
     const matched = getManureN2ODefaultFactor(
       standardVersion,
       row.species,
-      row.managementSystem
+      row.managementSystem || ""
     );
 
     if (!matched) {
       setStatusMessage(
-        `第 ${index + 1} 行未匹配到默认参数，请先使用常见管理方式名称，或手动填写。`
+        `第 ${rowIndex + 1} 条路径未匹配到参数法默认值，请先选择标准化管理方式。`
       );
       return;
     }
 
-    setValue(`rows.${index}.nexKgNPerHeadYear`, matched.nexKgNPerHeadYear, {
+    setValue(`rows.${rowIndex}.method`, "parameterCalculation", {
       shouldValidate: true,
     });
-    setValue(`rows.${index}.ef3KgN2ONPerKgN`, matched.ef3KgN2ONPerKgN, {
+    setValue(`rows.${rowIndex}.regionalEmissionFactor`, undefined, {
+      shouldValidate: false,
+    });
+    setValue(`rows.${rowIndex}.nexKgNPerHeadYear`, matched.nexKgNPerHeadYear, {
       shouldValidate: true,
     });
-    setValue(`rows.${index}.parameterSourceType`, "default_library", {
+    setValue(`rows.${rowIndex}.ef3KgN2ONPerKgN`, matched.ef3KgN2ONPerKgN, {
+      shouldValidate: true,
+    });
+    setValue(`rows.${rowIndex}.parameterSourceType`, "default_library", {
       shouldValidate: true,
     });
     setValue(
-      `rows.${index}.parameterSourceLabel`,
-      `${standardVersion} 默认库：${matched.sourceLabel}`,
+      `rows.${rowIndex}.parameterSourceLabel`,
+      `${standardVersion} ${matched.sourceLabel}`,
       {
         shouldValidate: true,
       }
     );
     setValue(
-      `rows.${index}.notes`,
+      `rows.${rowIndex}.notes`,
       mergeNote(
-        row.notes,
-        `${matched.sourceLabel}：${matched.note ?? "已自动带入默认值。"}`
+        watchedRows[rowIndex]?.notes,
+        `参数法默认值已带入：${matched.note}`
       ),
       { shouldValidate: true }
     );
 
-    setStatusMessage(`第 ${index + 1} 行已带入默认参数。`);
+    setStatusMessage(`第 ${rowIndex + 1} 条路径已带入参数法默认值。`);
   };
 
-  const applyDefaultsForAll = () => {
-    let matchedCount = 0;
-
-    const nextRows = watchedRows.map((row) => {
-      const matched = getManureN2ODefaultFactor(
-        standardVersion,
-        row.species,
-        row.managementSystem
-      );
-
-      if (!matched) return row;
-
-      matchedCount += 1;
-
-      return {
-        ...row,
-        nexKgNPerHeadYear: matched.nexKgNPerHeadYear,
-        ef3KgN2ONPerKgN: matched.ef3KgN2ONPerKgN,
-        parameterSourceType: "default_library" as const,
-        parameterSourceLabel: `${standardVersion} 默认库：${matched.sourceLabel}`,
-        notes: mergeNote(
-          row.notes,
-          `${matched.sourceLabel}：${matched.note ?? "已自动带入默认值。"}`
-        ),
-      };
+  const fillManagementSystemPreset = (rowIndex: number, label: string) => {
+    setValue(`rows.${rowIndex}.managementSystem`, label, {
+      shouldValidate: true,
     });
-
-    reset({ rows: nextRows });
-
-    setStatusMessage(
-      matchedCount > 0
-        ? `已为 ${matchedCount} 条记录带入默认参数。`
-        : "没有匹配到可带入的默认参数，请检查管理方式名称。"
-    );
+    setValue(`rows.${rowIndex}.parameterSourceType`, "manual_input", {
+      shouldValidate: true,
+    });
+    setValue(`rows.${rowIndex}.parameterSourceLabel`, "手工选择管理方式", {
+      shouldValidate: true,
+    });
   };
 
-  const fillManagementSystemPreset = (index: number, label: string) => {
-    setValue(`rows.${index}.managementSystem`, label, { shouldValidate: true });
-  };
-
-  const markRowManual = (index: number, label: string) => {
-    setValue(`rows.${index}.parameterSourceType`, "manual_input", {
+  const markRowManual = (rowIndex: number, label: string) => {
+    setValue(`rows.${rowIndex}.parameterSourceType`, "manual_input", {
       shouldDirty: true,
       shouldValidate: true,
     });
-    setValue(`rows.${index}.parameterSourceLabel`, label, {
+    setValue(`rows.${rowIndex}.parameterSourceLabel`, label, {
       shouldDirty: true,
       shouldValidate: true,
     });
@@ -260,8 +584,11 @@ export default function ManureN2OPage() {
       sourceLivestockIndex: row.sourceLivestockIndex,
       species: row.species.trim(),
       stage: row.stage.trim(),
-      method: "manualInput",
-      managementSystem: row.managementSystem.trim(),
+      method: row.method,
+      regionalEmissionFactor: row.regionalEmissionFactor,
+      managementSystem: row.managementSystem?.trim()
+        ? row.managementSystem.trim()
+        : undefined,
       sharePercent: row.sharePercent,
       nexKgNPerHeadYear: row.nexKgNPerHeadYear,
       ef3KgN2ONPerKgN: row.ef3KgN2ONPerKgN,
@@ -305,7 +632,7 @@ export default function ManureN2OPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto max-w-6xl px-6 py-12">
+      <div className="mx-auto max-w-7xl px-6 py-12">
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-slate-500">Manure N2O</p>
@@ -314,6 +641,9 @@ export default function ManureN2OPage() {
             </h1>
             <p className="mt-3 text-sm leading-7 text-slate-600">
               当前项目：{projectName || "未命名项目"} · 标准版本：{standardVersion}
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              地区：{projectRegion || "未填写"} · 区域组：{regionGroup}
             </p>
           </div>
 
@@ -335,312 +665,414 @@ export default function ManureN2OPage() {
 
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold">1. 管理方式路径录入</h2>
-                <p className="mt-2 text-sm text-slate-600">
-                  当前支持按“畜种 + 管理方式”自动带入 `Nex / EF3` 起始默认值。你仍然可以继续手动修改。
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={applyDefaultsForAll}
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-              >
-                为全部记录带入默认参数
-              </button>
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold">1. 推荐因子法 / 参数法</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                这一轮把养殖活动页里的扩展活动数据贯通到 manure N2O。参数法仍沿用 C.8/C.9，但页面会显示当前群体的 DMI、体重、饲养方式和群体类型，作为后续接 Nex 自动估算的准备数据。
+              </p>
             </div>
 
-            <div className="mb-6 flex flex-wrap gap-2">
-              {commonManagementSystemPresets.map((preset) => (
-                <span
-                  key={preset.id}
-                  className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600"
-                >
-                  {preset.label}
-                </span>
-              ))}
-            </div>
+            <div className="space-y-8">
+              {livestockRows.map((livestockRow, sourceIndex) => {
+                const rowIndexes = groupedIndexes[sourceIndex] ?? [];
+                const groupRows = rowIndexes.map((index) => watchedRows[index]);
+                const primaryRow = groupRows[0];
+                const mode =
+                  groupRows.some((row) => row?.method === "parameterCalculation")
+                    ? "parameterCalculation"
+                    : "regionalDefaultEF";
 
-            <div className="space-y-6">
-              {fields.map((field, index) => {
-                const rowPreview = calculationPreview.rows[index];
-                const annualHead = rowPreview?.annualAverageHead ?? 0;
-                const factorPerHead =
-                  rowPreview?.emissionFactorKgN2OPerHeadYear ?? 0;
-                const rowTotal = rowPreview?.rowN2OTPerYear ?? 0;
-                const rowSourceType =
-                  watchedRows[index]?.parameterSourceType ?? "manual_input";
-                const rowSourceLabel =
-                  watchedRows[index]?.parameterSourceLabel ?? "手工输入";
+                const parameterRows = rowIndexes.filter(
+                  (index) => watchedRows[index]?.method === "parameterCalculation"
+                );
+
+                const shareTotal = parameterRows.reduce(
+                  (sum, index) => sum + safeNumber(watchedRows[index]?.sharePercent),
+                  0
+                );
+
+                const groupPreview = calculationPreview.groups.find(
+                  (item) => item.sourceLivestockIndex === sourceIndex
+                );
+
+                const livestockDmi = getLivestockDmiValue(livestockRow);
 
                 return (
                   <div
-                    key={field.id}
+                    key={`${livestockRow.species}-${livestockRow.stage}-${sourceIndex}`}
                     className="rounded-2xl border border-slate-200 p-5"
                   >
-                    <div className="mb-4 flex items-center justify-between gap-3">
+                    <div className="mb-4 flex items-center justify-between gap-4">
                       <div>
                         <h3 className="text-base font-semibold">
-                          路径 {index + 1}
+                          畜种 {sourceIndex + 1}：{livestockRow.species} / {livestockRow.stage}
                         </h3>
                         <p className="mt-1 text-sm text-slate-500">
-                          年平均存栏：{annualHead}
+                          年平均存栏：{fmt(groupPreview?.annualAverageHead)}
                         </p>
                       </div>
 
-                      <div className="flex flex-col items-end gap-2">
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              append({
-                                sourceLivestockIndex:
-                                  watchedRows[index]?.sourceLivestockIndex ?? 0,
-                                species:
-                                  watchedRows[index]?.species ??
-                                  livestockRows[0]?.species ??
-                                  "",
-                                stage:
-                                  watchedRows[index]?.stage ??
-                                  livestockRows[0]?.stage ??
-                                  "",
-                                method: "manualInput",
-                                managementSystem: "",
-                                sharePercent: 0,
-                                nexKgNPerHeadYear: 0,
-                                ef3KgN2ONPerKgN: 0,
-                                parameterSourceType: "manual_input",
-                                parameterSourceLabel: "手工输入",
-                                notes: "",
-                              })
-                            }
-                            className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                          >
-                            为该畜种新增管理方式
-                          </button>
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => switchGroupToRegional(sourceIndex)}
+                          className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                        >
+                          切到推荐因子法
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => switchGroupToParameter(sourceIndex)}
+                          className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                        >
+                          切到参数法
+                        </button>
+                      </div>
+                    </div>
 
-                          <button
-                            type="button"
-                            onClick={() => applyDefaultsForRow(index)}
-                            className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                          >
-                            带入默认参数
-                          </button>
+                    <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      <div className={readonlyClass}>畜种：{livestockRow.species}</div>
+                      <div className={readonlyClass}>阶段：{livestockRow.stage}</div>
+                      <div className={readonlyClass}>
+                        当前路径：
+                        {mode === "regionalDefaultEF" ? "推荐因子法" : "参数法"}
+                      </div>
+                      <div className={readonlyClass}>
+                        该畜种 N2O：
+                        {fmt(groupPreview?.totalN2OTPerYear)} t/yr
+                      </div>
+                    </div>
 
-                          {fields.length > 1 ? (
+                    <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      <div className={readonlyClass}>
+                        生产功能：{livestockRow.productionPurpose ?? "未填"}
+                      </div>
+                      <div className={readonlyClass}>
+                        群体类型：{livestockRow.populationMode ?? "未填"}
+                      </div>
+                      <div className={readonlyClass}>
+                        饲养方式：{livestockRow.feedingSituation ?? "未填"}
+                      </div>
+                      <div className={readonlyClass}>
+                        DMI来源：{getLivestockDmiSourceLabel(livestockRow)}
+                      </div>
+                      <div className={readonlyClass}>
+                        当前DMI：{livestockDmi !== undefined ? `${fmt(livestockDmi, 4)} kg DM/头·日` : "未提供"}
+                      </div>
+                      <div className={readonlyClass}>
+                        期初体重：{livestockRow.openingWeightKg !== undefined ? `${fmt(livestockRow.openingWeightKg)} kg` : "未填"}
+                      </div>
+                      <div className={readonlyClass}>
+                        期末体重：{livestockRow.closingWeightKg !== undefined ? `${fmt(livestockRow.closingWeightKg)} kg` : "未填"}
+                      </div>
+                      <div className={readonlyClass}>
+                        日增重：{livestockRow.averageDailyGainKg !== undefined ? `${fmt(livestockRow.averageDailyGainKg, 4)} kg/d` : "未填"}
+                      </div>
+                    </div>
+
+                    <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                      这一步先把活动数据贯通到 manure N2O 页面。下一轮如果你愿意，我可以继续把 Nex 的自动估算口径接上：让参数法在有 DMI / 体重 / 群体信息时，优先给出“估算值 + 可手工覆盖”的模式。
+                    </div>
+
+                    {mode === "regionalDefaultEF" && primaryRow ? (
+                      <div className="rounded-2xl border border-slate-200 p-4">
+                        <div className="mb-4 flex items-center justify-between">
+                          <div>
+                            <p className="font-medium text-slate-900">
+                              区域化推荐因子路径
+                            </p>
+                            <p className="mt-1 text-sm text-slate-500">
+                              来源标签：{primaryRow.parameterSourceLabel}
+                            </p>
+                          </div>
+                          <span className={sourceBadgeClass(primaryRow.parameterSourceType)}>
+                            {getParameterSourceDisplay(primaryRow.parameterSourceType)}
+                          </span>
+                        </div>
+
+                        <input
+                          type="hidden"
+                          {...register(`rows.${rowIndexes[0]}.sourceLivestockIndex`, {
+                            valueAsNumber: true,
+                          })}
+                        />
+                        <input type="hidden" {...register(`rows.${rowIndexes[0]}.species`)} />
+                        <input type="hidden" {...register(`rows.${rowIndexes[0]}.stage`)} />
+                        <input type="hidden" {...register(`rows.${rowIndexes[0]}.method`)} />
+                        <input type="hidden" {...register(`rows.${rowIndexes[0]}.parameterSourceType`)} />
+                        <input type="hidden" {...register(`rows.${rowIndexes[0]}.parameterSourceLabel`)} />
+
+                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                          <div className={readonlyClass}>地区：{projectRegion || "-"}</div>
+                          <div className={readonlyClass}>区域组：{regionGroup}</div>
+
+                          <label className="block">
+                            <span className="mb-2 block text-sm font-medium text-slate-700">
+                              区域化推荐因子（kg N2O/头·年）
+                            </span>
+                            <input
+                              type="number"
+                              step="any"
+                              {...register(`rows.${rowIndexes[0]}.regionalEmissionFactor`, {
+                                valueAsNumber: true,
+                                onChange: () =>
+                                  markRowManual(rowIndexes[0], "手工覆盖表 C.10 推荐因子"),
+                              })}
+                              className={inputClass}
+                            />
+                            {errors.rows?.[rowIndexes[0]]?.regionalEmissionFactor?.message ? (
+                              <p className={errorClass}>
+                                {String(
+                                  errors.rows[rowIndexes[0]]?.regionalEmissionFactor?.message
+                                )}
+                              </p>
+                            ) : null}
+                          </label>
+
+                          <div className="flex items-end">
                             <button
                               type="button"
-                              onClick={() => remove(index)}
-                              className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                              onClick={() => applyRegionalDefaultForSource(sourceIndex)}
+                              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100"
                             >
-                              删除
+                              带入表 C.10 推荐因子
                             </button>
-                          ) : null}
+                          </div>
                         </div>
 
-                        <span className={sourceBadgeClass(rowSourceType)}>
-                          {getParameterSourceDisplay(rowSourceType)}
-                        </span>
-                        <span className="text-xs text-slate-500">
-                          {rowSourceLabel}
-                        </span>
+                        <label className="mt-4 block">
+                          <span className="mb-2 block text-sm font-medium text-slate-700">
+                            备注
+                          </span>
+                          <textarea
+                            {...register(`rows.${rowIndexes[0]}.notes`, {
+                              onChange: () =>
+                                markRowManual(rowIndexes[0], "手工补充说明"),
+                            })}
+                            rows={3}
+                            className={inputClass}
+                          />
+                        </label>
                       </div>
-                    </div>
+                    ) : null}
 
-                    <input
-                      type="hidden"
-                      {...register(`rows.${index}.sourceLivestockIndex`, {
-                        valueAsNumber: true,
-                      })}
-                    />
-                    <input
-                      type="hidden"
-                      {...register(`rows.${index}.method`)}
-                      value="manualInput"
-                    />
-                    <input type="hidden" {...register(`rows.${index}.parameterSourceType`)} />
-                    <input type="hidden" {...register(`rows.${index}.parameterSourceLabel`)} />
-
-                    <div className="mb-4 flex flex-wrap gap-2">
-                      {commonManagementSystemPresets.map((preset) => (
-                        <button
-                          key={preset.id}
-                          type="button"
-                          onClick={() =>
-                            fillManagementSystemPreset(index, preset.label)
-                          }
-                          className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:bg-slate-100"
-                        >
-                          填入：{preset.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                      <label className="block">
-                        <span className="mb-2 block text-sm font-medium text-slate-700">
-                          畜种
-                        </span>
-                        <input
-                          {...register(`rows.${index}.species`)}
-                          readOnly
-                          className={readonlyClass}
-                        />
-                      </label>
-
-                      <label className="block">
-                        <span className="mb-2 block text-sm font-medium text-slate-700">
-                          阶段
-                        </span>
-                        <input
-                          {...register(`rows.${index}.stage`)}
-                          readOnly
-                          className={readonlyClass}
-                        />
-                      </label>
-
-                      <label className="block">
-                        <span className="mb-2 block text-sm font-medium text-slate-700">
-                          管理方式
-                        </span>
-                        <input
-                          {...register(`rows.${index}.managementSystem`, {
-                            onChange: () =>
-                              markRowManual(index, "手工修改管理方式或参数"),
-                          })}
-                          className={inputClass}
-                          placeholder="例如：固体贮存"
-                        />
-                        {errors.rows?.[index]?.managementSystem?.message ? (
-                          <p className={errorClass}>
-                            {String(
-                              errors.rows[index]?.managementSystem?.message
+                    {mode === "parameterCalculation" ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="text-sm text-slate-700">
+                            参数法当前占比合计：{fmt(shareTotal, 2)}%
+                            {Math.abs(shareTotal - 100) < 0.5 ? (
+                              <span className="ml-3 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
+                                已闭合
+                              </span>
+                            ) : (
+                              <span className="ml-3 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
+                                未到 100%
+                              </span>
                             )}
-                          </p>
-                        ) : null}
-                      </label>
+                          </div>
 
-                      <label className="block">
-                        <span className="mb-2 block text-sm font-medium text-slate-700">
-                          管理方式占比（%）
-                        </span>
-                        <input
-                          type="number"
-                          step="any"
-                          {...register(`rows.${index}.sharePercent`, {
-                            valueAsNumber: true,
-                            onChange: () =>
-                              markRowManual(index, "手工修改管理方式或参数"),
-                          })}
-                          className={inputClass}
-                          placeholder="例如：60"
-                        />
-                        {errors.rows?.[index]?.sharePercent?.message ? (
-                          <p className={errorClass}>
-                            {String(errors.rows[index]?.sharePercent?.message)}
-                          </p>
-                        ) : null}
-                      </label>
-
-                      <label className="block">
-                        <span className="mb-2 block text-sm font-medium text-slate-700">
-                          Nex（kg N/head/year）
-                        </span>
-                        <input
-                          type="number"
-                          step="any"
-                          {...register(`rows.${index}.nexKgNPerHeadYear`, {
-                            valueAsNumber: true,
-                            onChange: () =>
-                              markRowManual(index, "手工修改管理方式或参数"),
-                          })}
-                          className={inputClass}
-                          placeholder="例如：80"
-                        />
-                        {errors.rows?.[index]?.nexKgNPerHeadYear?.message ? (
-                          <p className={errorClass}>
-                            {String(
-                              errors.rows[index]?.nexKgNPerHeadYear?.message
-                            )}
-                          </p>
-                        ) : null}
-                      </label>
-
-                      <label className="block">
-                        <span className="mb-2 block text-sm font-medium text-slate-700">
-                          EF3（kg N2O-N/kg N）
-                        </span>
-                        <input
-                          type="number"
-                          step="any"
-                          {...register(`rows.${index}.ef3KgN2ONPerKgN`, {
-                            valueAsNumber: true,
-                            onChange: () =>
-                              markRowManual(index, "手工修改管理方式或参数"),
-                          })}
-                          className={inputClass}
-                          placeholder="例如：0.005"
-                        />
-                        {errors.rows?.[index]?.ef3KgN2ONPerKgN?.message ? (
-                          <p className={errorClass}>
-                            {String(
-                              errors.rows[index]?.ef3KgN2ONPerKgN?.message
-                            )}
-                          </p>
-                        ) : null}
-                      </label>
-
-                      <label className="block">
-                        <span className="mb-2 block text-sm font-medium text-slate-700">
-                          每头年排放因子预览
-                        </span>
-                        <div className={readonlyClass}>
-                          {factorPerHead.toFixed(3)} kg N2O/head/yr
+                          <button
+                            type="button"
+                            onClick={() => addParameterPathForSource(sourceIndex)}
+                            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                          >
+                            新增管理方式路径
+                          </button>
                         </div>
-                      </label>
-                    </div>
 
-                    <label className="mt-4 block">
-                      <span className="mb-2 block text-sm font-medium text-slate-700">
-                        备注
-                      </span>
-                      <textarea
-                        {...register(`rows.${index}.notes`)}
-                        rows={3}
-                        className={inputClass}
-                        placeholder="可填写参数来源、管理方式说明等"
-                      />
-                      {errors.rows?.[index]?.notes?.message ? (
-                        <p className={errorClass}>
-                          {String(errors.rows[index]?.notes?.message)}
-                        </p>
-                      ) : null}
-                    </label>
+                        {parameterRows.map((rowIndex, pathIndex) => {
+                          const row = watchedRows[rowIndex];
 
-                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                      该路径年度 N2O 预览：{rowTotal.toFixed(3)} t N2O/yr
-                    </div>
+                          return (
+                            <div
+                              key={fields[rowIndex]?.id ?? `${sourceIndex}-${pathIndex}`}
+                              className="rounded-2xl border border-slate-200 p-4"
+                            >
+                              <div className="mb-4 flex items-center justify-between">
+                                <div>
+                                  <p className="font-medium text-slate-900">
+                                    参数路径 {pathIndex + 1}
+                                  </p>
+                                  <p className="mt-1 text-sm text-slate-500">
+                                    来源标签：{row?.parameterSourceLabel}
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                  <span className={sourceBadgeClass(row?.parameterSourceType ?? "manual_input")}>
+                                    {getParameterSourceDisplay(row?.parameterSourceType ?? "manual_input")}
+                                  </span>
+
+                                  {parameterRows.length > 1 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        removeParameterPath(sourceIndex, rowIndex)
+                                      }
+                                      className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                                    >
+                                      删除路径
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </div>
+
+                              <input
+                                type="hidden"
+                                {...register(`rows.${rowIndex}.sourceLivestockIndex`, {
+                                  valueAsNumber: true,
+                                })}
+                              />
+                              <input type="hidden" {...register(`rows.${rowIndex}.species`)} />
+                              <input type="hidden" {...register(`rows.${rowIndex}.stage`)} />
+                              <input type="hidden" {...register(`rows.${rowIndex}.method`)} />
+                              <input type="hidden" {...register(`rows.${rowIndex}.parameterSourceType`)} />
+                              <input type="hidden" {...register(`rows.${rowIndex}.parameterSourceLabel`)} />
+
+                              <div className="mb-4 flex flex-wrap gap-2">
+                                {commonManagementSystemPresets.map((preset) => (
+                                  <button
+                                    key={preset.id}
+                                    type="button"
+                                    onClick={() =>
+                                      fillManagementSystemPreset(rowIndex, preset.label)
+                                    }
+                                    className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                                  >
+                                    填入：{preset.label}
+                                  </button>
+                                ))}
+                              </div>
+
+                              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                <label className="block">
+                                  <span className="mb-2 block text-sm font-medium text-slate-700">
+                                    管理方式
+                                  </span>
+                                  <input
+                                    {...register(`rows.${rowIndex}.managementSystem`, {
+                                      onChange: () =>
+                                        markRowManual(rowIndex, "手工修改参数法路径"),
+                                    })}
+                                    className={inputClass}
+                                    placeholder="例如：固体贮存"
+                                  />
+                                  {errors.rows?.[rowIndex]?.managementSystem?.message ? (
+                                    <p className={errorClass}>
+                                      {String(errors.rows[rowIndex]?.managementSystem?.message)}
+                                    </p>
+                                  ) : null}
+                                </label>
+
+                                <label className="block">
+                                  <span className="mb-2 block text-sm font-medium text-slate-700">
+                                    占比（%）
+                                  </span>
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    {...register(`rows.${rowIndex}.sharePercent`, {
+                                      valueAsNumber: true,
+                                      onChange: () =>
+                                        markRowManual(rowIndex, "手工修改参数法路径"),
+                                    })}
+                                    className={inputClass}
+                                  />
+                                  {errors.rows?.[rowIndex]?.sharePercent?.message ? (
+                                    <p className={errorClass}>
+                                      {String(errors.rows[rowIndex]?.sharePercent?.message)}
+                                    </p>
+                                  ) : null}
+                                </label>
+
+                                <label className="block">
+                                  <span className="mb-2 block text-sm font-medium text-slate-700">
+                                    Nex（kg N/头·年）
+                                  </span>
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    {...register(`rows.${rowIndex}.nexKgNPerHeadYear`, {
+                                      valueAsNumber: true,
+                                      onChange: () =>
+                                        markRowManual(rowIndex, "手工修改参数法路径"),
+                                    })}
+                                    className={inputClass}
+                                  />
+                                  {errors.rows?.[rowIndex]?.nexKgNPerHeadYear?.message ? (
+                                    <p className={errorClass}>
+                                      {String(errors.rows[rowIndex]?.nexKgNPerHeadYear?.message)}
+                                    </p>
+                                  ) : null}
+                                </label>
+
+                                <label className="block">
+                                  <span className="mb-2 block text-sm font-medium text-slate-700">
+                                    EF3（kg N2O-N/kg N）
+                                  </span>
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    {...register(`rows.${rowIndex}.ef3KgN2ONPerKgN`, {
+                                      valueAsNumber: true,
+                                      onChange: () =>
+                                        markRowManual(rowIndex, "手工修改参数法路径"),
+                                    })}
+                                    className={inputClass}
+                                  />
+                                  {errors.rows?.[rowIndex]?.ef3KgN2ONPerKgN?.message ? (
+                                    <p className={errorClass}>
+                                      {String(errors.rows[rowIndex]?.ef3KgN2ONPerKgN?.message)}
+                                    </p>
+                                  ) : null}
+                                </label>
+                              </div>
+
+                              <div className="mt-4 flex flex-wrap gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => applyParameterDefaultForRow(rowIndex)}
+                                  className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                                >
+                                  带入 C.8/C.9 参数法默认值
+                                </button>
+                              </div>
+
+                              <label className="mt-4 block">
+                                <span className="mb-2 block text-sm font-medium text-slate-700">
+                                  备注
+                                </span>
+                                <textarea
+                                  {...register(`rows.${rowIndex}.notes`, {
+                                    onChange: () =>
+                                      markRowManual(rowIndex, "手工补充说明"),
+                                  })}
+                                  rows={3}
+                                  className={inputClass}
+                                  placeholder="可填写参数来源、路径选择说明等"
+                                />
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
             </div>
-
-            {errors.rows?.message ? (
-              <p className="mt-4 text-sm text-red-600">
-                {String(errors.rows.message)}
-              </p>
-            ) : null}
           </section>
 
           <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-6">
-            <h2 className="text-lg font-semibold">2. 占比校验与汇总</h2>
+            <h2 className="text-lg font-semibold">2. 汇总预览</h2>
             <div className="mt-3 space-y-2 text-sm text-slate-600">
+              <p>当前地区：{projectRegion || "-"}；区域组：{regionGroup}</p>
               <p>
                 当前年度 N2O 预览总量：
-                {calculationPreview.totalN2OTPerYear.toFixed(3)} t N2O/yr
+                {fmt(calculationPreview.totalN2OTPerYear)} t N2O/yr
               </p>
+              <p>这里的动物/阶段始终跟随养殖活动页同步；同时已把 DMI、体重、饲养方式等活动数据贯通到本页，作为后续 Nex 自动估算的准备数据。</p>
               <p>保存方式：浏览器本地草稿</p>
               {statusMessage ? (
                 <p className="font-medium text-slate-800">{statusMessage}</p>
@@ -655,12 +1087,8 @@ export default function ManureN2OPage() {
                     <th className="border-b border-slate-200 px-3 py-2">阶段</th>
                     <th className="border-b border-slate-200 px-3 py-2">占比合计（%）</th>
                     <th className="border-b border-slate-200 px-3 py-2">状态</th>
-                    <th className="border-b border-slate-200 px-3 py-2">
-                      合计因子
-                    </th>
-                    <th className="border-b border-slate-200 px-3 py-2">
-                      t N2O/yr
-                    </th>
+                    <th className="border-b border-slate-200 px-3 py-2">合计因子</th>
+                    <th className="border-b border-slate-200 px-3 py-2">t N2O/yr</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -673,7 +1101,7 @@ export default function ManureN2OPage() {
                         {group.stage}
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
-                        {group.shareTotalPercent.toFixed(2)}
+                        {fmt(group.shareTotalPercent, 2)}
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
                         {group.isShareBalanced ? (
@@ -687,10 +1115,10 @@ export default function ManureN2OPage() {
                         )}
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
-                        {group.emissionFactorKgN2OPerHeadYear.toFixed(3)} kg/head/yr
+                        {fmt(group.emissionFactorKgN2OPerHeadYear)} kg/head/yr
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
-                        {group.totalN2OTPerYear.toFixed(3)}
+                        {fmt(group.totalN2OTPerYear)}
                       </td>
                     </tr>
                   ))}
@@ -708,44 +1136,46 @@ export default function ManureN2OPage() {
                   <tr className="text-left text-slate-600">
                     <th className="border-b border-slate-200 px-3 py-2">畜种</th>
                     <th className="border-b border-slate-200 px-3 py-2">阶段</th>
+                    <th className="border-b border-slate-200 px-3 py-2">方法</th>
                     <th className="border-b border-slate-200 px-3 py-2">管理方式</th>
                     <th className="border-b border-slate-200 px-3 py-2">占比</th>
+                    <th className="border-b border-slate-200 px-3 py-2">区域推荐因子</th>
                     <th className="border-b border-slate-200 px-3 py-2">Nex</th>
                     <th className="border-b border-slate-200 px-3 py-2">EF3</th>
                     <th className="border-b border-slate-200 px-3 py-2">管理氮量</th>
-                    <th className="border-b border-slate-200 px-3 py-2">因子</th>
+                    <th className="border-b border-slate-200 px-3 py-2">合成因子</th>
                     <th className="border-b border-slate-200 px-3 py-2">t N2O/yr</th>
                   </tr>
                 </thead>
                 <tbody>
                   {calculationPreview.rows.map((row, index) => (
-                    <tr key={`${row.species}-${row.stage}-${row.managementSystem}-${index}`}>
-                      <td className="border-b border-slate-100 px-3 py-2">
-                        {row.species}
-                      </td>
-                      <td className="border-b border-slate-100 px-3 py-2">
-                        {row.stage}
-                      </td>
+                    <tr key={`${row.species}-${row.stage}-${index}`}>
+                      <td className="border-b border-slate-100 px-3 py-2">{row.species}</td>
+                      <td className="border-b border-slate-100 px-3 py-2">{row.stage}</td>
+                      <td className="border-b border-slate-100 px-3 py-2">{row.method}</td>
                       <td className="border-b border-slate-100 px-3 py-2">
                         {row.managementSystem || "-"}
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
-                        {row.sharePercent.toFixed(2)}%
+                        {fmt(row.sharePercent, 2)}%
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
-                        {row.nexKgNPerHeadYear.toFixed(3)}
+                        {fmt(row.regionalEmissionFactor)}
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
-                        {row.ef3KgN2ONPerKgN.toFixed(4)}
+                        {fmt(row.nexKgNPerHeadYear)}
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
-                        {row.managedNitrogenKgPerYear.toFixed(2)} kg N/yr
+                        {fmt(row.ef3KgN2ONPerKgN, 4)}
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
-                        {row.emissionFactorKgN2OPerHeadYear.toFixed(3)} kg/head/yr
+                        {fmt(row.managedNitrogenKgPerYear, 2)}
                       </td>
                       <td className="border-b border-slate-100 px-3 py-2">
-                        {row.rowN2OTPerYear.toFixed(3)}
+                        {fmt(row.emissionFactorKgN2OPerHeadYear)} kg/head/yr
+                      </td>
+                      <td className="border-b border-slate-100 px-3 py-2">
+                        {fmt(row.rowN2OTPerYear)}
                       </td>
                     </tr>
                   ))}

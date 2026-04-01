@@ -1,4 +1,8 @@
-import type { ProjectDraft } from "@/types/ghg";
+import type {
+  FeedLedgerRecord,
+  LivestockMonthlyChangeRecord,
+  ProjectDraft,
+} from "@/types/ghg";
 
 export type ProjectCheckSeverity = "error" | "warning" | "ok";
 
@@ -51,10 +55,120 @@ function isEnergyBalanceAllZero(draft: ProjectDraft) {
   ].every((value) => safeNumber(value) === 0);
 }
 
+function validateMonthlyRecords(
+  monthlyRecords: LivestockMonthlyChangeRecord[]
+) {
+  const issues: string[] = [];
+
+  if (monthlyRecords.length !== 12) {
+    issues.push("月度动态记录不是 12 个月。");
+    return issues;
+  }
+
+  for (let i = 0; i < monthlyRecords.length; i += 1) {
+    const row = monthlyRecords[i];
+
+    const opening = safeNumber(row.openingHead);
+    const additions =
+      safeNumber(row.births) +
+      safeNumber(row.transferredIn) +
+      safeNumber(row.purchasedIn);
+    const reductions =
+      safeNumber(row.culled) +
+      safeNumber(row.sold) +
+      safeNumber(row.transferredOut) +
+      safeNumber(row.deaths);
+    const closing = safeNumber(row.closingHead);
+
+    if (Math.abs(opening + additions - reductions - closing) > 0.5) {
+      issues.push(
+        `${row.month}月不平衡：月初 + 新增 - 减少 ≠ 月末。`
+      );
+    }
+
+    if (i > 0) {
+      const prevClosing = safeNumber(monthlyRecords[i - 1].closingHead);
+      if (Math.abs(prevClosing - opening) > 0.5) {
+        issues.push(`${row.month}月月初存栏未承接上月月末。`);
+      }
+    }
+  }
+
+  return issues;
+}
+
+function getFeedLedgerOutboundForGroup(
+  feedLedger: FeedLedgerRecord[],
+  sourceLivestockIndex: number
+) {
+  return feedLedger.filter(
+    (item) =>
+      item.direction === "outbound" &&
+      item.targetGroupSourceLivestockIndex === sourceLivestockIndex
+  );
+}
+
+function calcFeedLedgerDMIInfo(
+  draft: ProjectDraft,
+  sourceLivestockIndex: number
+) {
+  const livestock = draft.livestock[sourceLivestockIndex];
+  if (!livestock) {
+    return {
+      outboundCount: 0,
+      totalDryMatterKg: 0,
+      headDays: 0,
+      dmiKgPerHeadDay: 0,
+    };
+  }
+
+  const outboundRows = getFeedLedgerOutboundForGroup(
+    draft.feedLedger ?? [],
+    sourceLivestockIndex
+  );
+
+  const totalDryMatterKg = outboundRows.reduce((sum, item) => {
+    const quantityTon = safeNumber(item.quantityTon);
+    const moisturePercent = safeNumber(item.moisturePercent);
+    const dryMatterRate = Math.max(0, 1 - moisturePercent / 100);
+    return sum + quantityTon * 1000 * dryMatterRate;
+  }, 0);
+
+  let headDays = 0;
+  if (livestock.monthlyRecords && livestock.monthlyRecords.length === 12) {
+    const monthDays = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    headDays = livestock.monthlyRecords.reduce((sum, row, index) => {
+      const avgHead =
+        (safeNumber(row.openingHead) + safeNumber(row.closingHead)) / 2;
+      return sum + avgHead * monthDays[index];
+    }, 0);
+  } else if (
+    livestock.populationMode === "turnover" &&
+    safeNumber(livestock.annualOutputHead) > 0 &&
+    safeNumber(livestock.feedingDays) > 0
+  ) {
+    headDays =
+      safeNumber(livestock.annualOutputHead) *
+      safeNumber(livestock.feedingDays);
+  } else {
+    headDays = safeNumber(livestock.annualAverageHead) * 365;
+  }
+
+  const dmiKgPerHeadDay = headDays > 0 ? totalDryMatterKg / headDays : 0;
+
+  return {
+    outboundCount: outboundRows.length,
+    totalDryMatterKg,
+    headDays,
+    dmiKgPerHeadDay,
+  };
+}
+
 export function runProjectChecks(draft: ProjectDraft): ProjectCheckResult {
   const items: ProjectCheckItem[] = [];
 
   const livestock = draft.livestock ?? [];
+  const feedLedger = draft.feedLedger ?? [];
   const enteric = draft.enteric ?? [];
   const manureCH4 = draft.manureCH4 ?? [];
   const manureN2O = draft.manureN2O ?? [];
@@ -84,10 +198,10 @@ export function runProjectChecks(draft: ProjectDraft): ProjectCheckResult {
   if (!draft.base.region?.trim()) {
     pushItem(items, {
       id: "base-region-missing",
-      severity: "warning",
+      severity: "error",
       section: "基础信息",
       title: "地区信息未填写",
-      detail: "建议补充所在地区，便于后续报告完整性。",
+      detail: "区域化推荐因子需要标准化地区，请在基础信息页面选择地区。",
       link: "/project/new",
     });
   }
@@ -99,16 +213,176 @@ export function runProjectChecks(draft: ProjectDraft): ProjectCheckResult {
       severity: "error",
       section: "养殖活动",
       title: "未录入养殖活动数据",
-      detail: "至少需要一条养殖活动记录才能继续完整核算。",
+      detail: "至少需要一条群体记录才能继续完整核算。",
       link: "/project/livestock",
     });
   } else {
+    livestock.forEach((row, index) => {
+      if (!row.species?.trim() || !row.stage?.trim()) {
+        pushItem(items, {
+          id: `livestock-id-${index}`,
+          severity: "error",
+          section: "养殖活动",
+          title: `第 ${index + 1} 条群体缺少标准动物/阶段`,
+          detail: "请补充标准动物类别和阶段。",
+          link: "/project/livestock",
+        });
+      }
+
+      const monthlyIssues = validateMonthlyRecords(row.monthlyRecords ?? []);
+      if (monthlyIssues.length > 0) {
+        pushItem(items, {
+          id: `livestock-monthly-${index}`,
+          severity: "error",
+          section: "养殖活动",
+          title: `第 ${index + 1} 条群体月度动态存在问题`,
+          detail: monthlyIssues.join("；"),
+          link: "/project/livestock",
+        });
+      }
+
+      if (safeNumber(row.annualAverageHead) <= 0) {
+        pushItem(items, {
+          id: `livestock-ap-${index}`,
+          severity: "warning",
+          section: "养殖活动",
+          title: `第 ${index + 1} 条群体年平均存栏为 0`,
+          detail: "请检查月度动态或年平均存栏计算结果。",
+          link: "/project/livestock",
+        });
+      }
+
+      if (row.populationMode === "turnover") {
+        if (
+          safeNumber(row.annualOutputHead) <= 0 ||
+          safeNumber(row.feedingDays) <= 0
+        ) {
+          pushItem(items, {
+            id: `livestock-turnover-${index}`,
+            severity: "error",
+            section: "养殖活动",
+            title: `第 ${index + 1} 条周转群体缺少出栏量或饲养周期`,
+            detail: "周转群体至少需要年度出栏量和饲养周期天数。",
+            link: "/project/livestock",
+          });
+        }
+      }
+
+      if (
+        row.dmiMethod === "direct_input" ||
+        row.dmiMethod === "temporary_estimate"
+      ) {
+        if (safeNumber(row.dmiKgPerHeadDay) <= 0) {
+          pushItem(items, {
+            id: `livestock-dmi-direct-${index}`,
+            severity: "warning",
+            section: "养殖活动",
+            title: `第 ${index + 1} 条群体尚未形成 DMI`,
+            detail: "当前 DMI 获取方式要求直接提供 DMI，但该值尚未填写。",
+            link: "/project/livestock",
+          });
+        }
+      }
+
+      if (row.dmiMethod === "feed_ledger") {
+        const info = calcFeedLedgerDMIInfo(draft, index);
+
+        if (info.outboundCount === 0) {
+          pushItem(items, {
+            id: `livestock-feed-ledger-empty-${index}`,
+            severity: "warning",
+            section: "饲料台账",
+            title: `第 ${index + 1} 条群体使用“饲料台账反推 DMI”，但没有出库记录`,
+            detail: "请至少录入一条绑定到该群体的出库饲料记录。",
+            link: "/project/livestock",
+          });
+        } else if (info.dmiKgPerHeadDay <= 0) {
+          pushItem(items, {
+            id: `livestock-feed-ledger-dmi-${index}`,
+            severity: "warning",
+            section: "饲料台账",
+            title: `第 ${index + 1} 条群体饲料台账未能形成有效 DMI`,
+            detail: "请检查出库量、含水率或 head-days 是否合理。",
+            link: "/project/livestock",
+          });
+        } else {
+          pushItem(items, {
+            id: `livestock-feed-ledger-ok-${index}`,
+            severity: "ok",
+            section: "饲料台账",
+            title: `第 ${index + 1} 条群体已通过饲料台账形成 DMI`,
+            detail: `当前反推 DMI = ${info.dmiKgPerHeadDay.toFixed(4)} kg DM/头·日。`,
+            link: "/project/livestock",
+          });
+        }
+      }
+    });
+
     pushItem(items, {
       id: "livestock-ok",
       severity: "ok",
       section: "养殖活动",
-      title: "养殖活动已录入",
-      detail: `共 ${livestock.length} 条记录。`,
+      title: "养殖活动底座已建立",
+      detail: `共 ${livestock.length} 条群体记录。`,
+      link: "/project/livestock",
+    });
+  }
+
+  // 饲料台账
+  if (feedLedger.length === 0) {
+    pushItem(items, {
+      id: "feed-ledger-empty",
+      severity: "warning",
+      section: "饲料台账",
+      title: "尚未录入饲料台账",
+      detail: "如果你计划通过出库量和含水率反推 DMI，请补充饲料入库/出库记录。",
+      link: "/project/livestock",
+    });
+  } else {
+    feedLedger.forEach((item, index) => {
+      if (!item.feedName?.trim()) {
+        pushItem(items, {
+          id: `feed-ledger-name-${index}`,
+          severity: "warning",
+          section: "饲料台账",
+          title: `第 ${index + 1} 条台账记录缺少饲料名称`,
+          detail: "建议补充饲料名称，便于后续审计追溯。",
+          link: "/project/livestock",
+        });
+      }
+
+      if (safeNumber(item.quantityTon) <= 0) {
+        pushItem(items, {
+          id: `feed-ledger-qty-${index}`,
+          severity: "warning",
+          section: "饲料台账",
+          title: `第 ${index + 1} 条台账记录数量为 0`,
+          detail: "请检查数量录入是否正确。",
+          link: "/project/livestock",
+        });
+      }
+
+      if (
+        item.direction === "outbound" &&
+        item.targetGroupSourceLivestockIndex === undefined
+      ) {
+        pushItem(items, {
+          id: `feed-ledger-target-${index}`,
+          severity: "warning",
+          section: "饲料台账",
+          title: `第 ${index + 1} 条出库记录未绑定饲喂群体`,
+          detail: "未绑定群体的出库记录不会进入 DMI 反推。",
+          link: "/project/livestock",
+        });
+      }
+    });
+
+    pushItem(items, {
+      id: "feed-ledger-ok",
+      severity: "ok",
+      section: "饲料台账",
+      title: "饲料台账已录入",
+      detail: `共 ${feedLedger.length} 条记录。`,
       link: "/project/livestock",
     });
   }
@@ -134,39 +408,86 @@ export function runProjectChecks(draft: ProjectDraft): ProjectCheckResult {
           severity: "error",
           section: "肠道发酵 CH4",
           title: `缺少第 ${index + 1} 条养殖记录的肠道发酵参数`,
-          detail: "请为对应畜种补充肠道发酵排放因子。",
+          detail: "请为对应畜种补充肠道发酵排放参数。",
           link: "/project/enteric",
         });
       }
     });
 
     enteric.forEach((row, index) => {
-      if (safeNumber(row.emissionFactor) <= 0) {
-        pushItem(items, {
-          id: `enteric-ef-invalid-${index}`,
-          severity: "error",
-          section: "肠道发酵 CH4",
-          title: `第 ${index + 1} 条肠道发酵因子无效`,
-          detail: "排放因子必须大于 0。",
-          link: "/project/enteric",
-        });
+      const activityMethod = row.activityDataMethod ?? "annualAveragePopulation";
+
+      if (activityMethod === "annualAveragePopulation") {
+        if (safeNumber(row.annualAveragePopulation) <= 0) {
+          pushItem(items, {
+            id: `enteric-ap-invalid-${index}`,
+            severity: "error",
+            section: "肠道发酵 CH4",
+            title: `第 ${index + 1} 条肠道发酵活动数据无效`,
+            detail: "直接录入 AP 时，年平均存栏必须大于 0。",
+            link: "/project/enteric",
+          });
+        }
+      }
+
+      if (activityMethod === "turnoverCalculation") {
+        if (
+          safeNumber(row.annualThroughput) <= 0 ||
+          safeNumber(row.daysAlive) <= 0
+        ) {
+          pushItem(items, {
+            id: `enteric-turnover-invalid-${index}`,
+            severity: "error",
+            section: "肠道发酵 CH4",
+            title: `第 ${index + 1} 条肠道发酵短生长期折算参数无效`,
+            detail: "短生长期动物需要填写年度饲养量 NA 和生长天数 DA。",
+            link: "/project/enteric",
+          });
+        }
+      }
+
+      if (
+        row.method === "defaultEF" ||
+        row.method === "measuredEF" ||
+        row.method === "customEF"
+      ) {
+        if (safeNumber(row.emissionFactor) <= 0) {
+          pushItem(items, {
+            id: `enteric-ef-invalid-${index}`,
+            severity: "error",
+            section: "肠道发酵 CH4",
+            title: `第 ${index + 1} 条肠道发酵因子无效`,
+            detail: "推荐因子法或实测/手工法下，EF 必须大于 0。",
+            link: "/project/enteric",
+          });
+        }
+      }
+
+      if (row.method === "calculatedEF") {
+        if (
+          safeNumber(row.dmiKgPerHeadDay) <= 0 ||
+          safeNumber(row.ymPercent) <= 0
+        ) {
+          pushItem(items, {
+            id: `enteric-calculated-invalid-${index}`,
+            severity: "error",
+            section: "肠道发酵 CH4",
+            title: `第 ${index + 1} 条肠道发酵计算法参数无效`,
+            detail: "计算法下，DMI 和 Ym 都必须大于 0。",
+            link: "/project/enteric",
+          });
+        }
       }
     });
 
-    if (
-      livestock.length > 0 &&
-      livestockIndices.every((index) => entericIndices.has(index)) &&
-      enteric.every((row) => safeNumber(row.emissionFactor) > 0)
-    ) {
-      pushItem(items, {
-        id: "enteric-ok",
-        severity: "ok",
-        section: "肠道发酵 CH4",
-        title: "肠道发酵模块完整",
-        detail: `共 ${enteric.length} 条记录。`,
-        link: "/project/enteric",
-      });
-    }
+    pushItem(items, {
+      id: "enteric-ok",
+      severity: "ok",
+      section: "肠道发酵 CH4",
+      title: "肠道发酵模块已建立对应关系",
+      detail: `共 ${enteric.length} 条记录。`,
+      link: "/project/enteric",
+    });
   }
 
   // 粪污管理 CH4
@@ -180,15 +501,29 @@ export function runProjectChecks(draft: ProjectDraft): ProjectCheckResult {
       link: "/project/manure-ch4",
     });
   } else {
-    const shareMap = new Map<number, number>();
+    const indicesCovered = new Set<number>();
+
     manureCH4.forEach((row, index) => {
-      const share = safeNumber(row.sharePercent);
-      shareMap.set(
-        row.sourceLivestockIndex,
-        safeNumber(shareMap.get(row.sourceLivestockIndex)) + share
-      );
+      indicesCovered.add(row.sourceLivestockIndex);
+
+      if (row.method === "regionalDefaultEF") {
+        if (safeNumber(row.regionalEmissionFactor) <= 0) {
+          pushItem(items, {
+            id: `manure-ch4-regional-invalid-${index}`,
+            severity: "error",
+            section: "粪污管理 CH4",
+            title: `第 ${index + 1} 条粪污管理 CH4 区域化推荐因子无效`,
+            detail: "推荐因子法下，区域化推荐因子必须大于 0。",
+            link: "/project/manure-ch4",
+          });
+        }
+        return;
+      }
 
       if (
+        !row.managementSystem?.trim() ||
+        safeNumber(row.sharePercent) <= 0 ||
+        safeNumber(row.sharePercent) > 100 ||
         safeNumber(row.vsKgPerHeadPerDay) <= 0 ||
         safeNumber(row.boM3PerKgVS) <= 0 ||
         safeNumber(row.mcfPercent) < 0
@@ -197,35 +532,63 @@ export function runProjectChecks(draft: ProjectDraft): ProjectCheckResult {
           id: `manure-ch4-param-invalid-${index}`,
           severity: "error",
           section: "粪污管理 CH4",
-          title: `第 ${index + 1} 条粪污管理 CH4 参数无效`,
-          detail: "VS、B₀ 必须大于 0，MCF 不能小于 0。",
+          title: `第 ${index + 1} 条粪污管理 CH4 参数法路径无效`,
+          detail: "参数法下必须填写管理方式、占比、VS、B₀ 和 MCF。",
           link: "/project/manure-ch4",
         });
       }
     });
 
     livestock.forEach((_, index) => {
-      const totalShare = safeNumber(shareMap.get(index));
-      if (totalShare === 0) {
+      const rowsForIndex = manureCH4.filter(
+        (row) => row.sourceLivestockIndex === index
+      );
+
+      if (rowsForIndex.length === 0) {
         pushItem(items, {
           id: `manure-ch4-missing-index-${index}`,
           severity: "warning",
           section: "粪污管理 CH4",
-          title: `第 ${index + 1} 条养殖记录未配置粪污管理 CH4 路径`,
-          detail: "建议补充该畜种的管理方式路径。",
+          title: `第 ${index + 1} 条养殖记录未配置粪污管理 CH4`,
+          detail: "建议为该畜种配置推荐因子法或参数法。",
           link: "/project/manure-ch4",
         });
-      } else if (!approx100(totalShare)) {
-        pushItem(items, {
-          id: `manure-ch4-share-${index}`,
-          severity: "error",
-          section: "粪污管理 CH4",
-          title: `第 ${index + 1} 条养殖记录的 CH4 管理方式占比未闭合`,
-          detail: `当前占比合计为 ${totalShare.toFixed(2)}%，应接近 100%。`,
-          link: "/project/manure-ch4",
-        });
+        return;
+      }
+
+      const parameterRows = rowsForIndex.filter(
+        (row) => row.method === "parameterCalculation"
+      );
+
+      if (parameterRows.length > 0) {
+        const totalShare = parameterRows.reduce(
+          (sum, row) => sum + safeNumber(row.sharePercent),
+          0
+        );
+
+        if (!approx100(totalShare)) {
+          pushItem(items, {
+            id: `manure-ch4-share-${index}`,
+            severity: "error",
+            section: "粪污管理 CH4",
+            title: `第 ${index + 1} 条养殖记录的 CH4 参数法占比未闭合`,
+            detail: `当前参数法路径占比合计为 ${totalShare.toFixed(2)}%，应接近 100%。`,
+            link: "/project/manure-ch4",
+          });
+        }
       }
     });
+
+    if (indicesCovered.size > 0) {
+      pushItem(items, {
+        id: "manure-ch4-ok",
+        severity: "ok",
+        section: "粪污管理 CH4",
+        title: "粪污管理 CH4 模块已建立对应关系",
+        detail: `共 ${manureCH4.length} 条路径。`,
+        link: "/project/manure-ch4",
+      });
+    }
   }
 
   // 粪污管理 N2O
@@ -239,15 +602,29 @@ export function runProjectChecks(draft: ProjectDraft): ProjectCheckResult {
       link: "/project/manure-n2o",
     });
   } else {
-    const shareMap = new Map<number, number>();
+    const indicesCovered = new Set<number>();
+
     manureN2O.forEach((row, index) => {
-      const share = safeNumber(row.sharePercent);
-      shareMap.set(
-        row.sourceLivestockIndex,
-        safeNumber(shareMap.get(row.sourceLivestockIndex)) + share
-      );
+      indicesCovered.add(row.sourceLivestockIndex);
+
+      if (row.method === "regionalDefaultEF") {
+        if (safeNumber(row.regionalEmissionFactor) <= 0) {
+          pushItem(items, {
+            id: `manure-n2o-regional-invalid-${index}`,
+            severity: "error",
+            section: "粪污管理 N2O",
+            title: `第 ${index + 1} 条粪污管理 N2O 区域化推荐因子无效`,
+            detail: "推荐因子法下，区域化推荐因子必须大于 0。",
+            link: "/project/manure-n2o",
+          });
+        }
+        return;
+      }
 
       if (
+        !row.managementSystem?.trim() ||
+        safeNumber(row.sharePercent) <= 0 ||
+        safeNumber(row.sharePercent) > 100 ||
         safeNumber(row.nexKgNPerHeadYear) <= 0 ||
         safeNumber(row.ef3KgN2ONPerKgN) < 0
       ) {
@@ -255,35 +632,63 @@ export function runProjectChecks(draft: ProjectDraft): ProjectCheckResult {
           id: `manure-n2o-param-invalid-${index}`,
           severity: "error",
           section: "粪污管理 N2O",
-          title: `第 ${index + 1} 条粪污管理 N2O 参数无效`,
-          detail: "Nex 必须大于 0，EF3 不能小于 0。",
+          title: `第 ${index + 1} 条粪污管理 N2O 参数法路径无效`,
+          detail: "参数法下必须填写管理方式、占比、Nex 和 EF3。",
           link: "/project/manure-n2o",
         });
       }
     });
 
     livestock.forEach((_, index) => {
-      const totalShare = safeNumber(shareMap.get(index));
-      if (totalShare === 0) {
+      const rowsForIndex = manureN2O.filter(
+        (row) => row.sourceLivestockIndex === index
+      );
+
+      if (rowsForIndex.length === 0) {
         pushItem(items, {
           id: `manure-n2o-missing-index-${index}`,
           severity: "warning",
           section: "粪污管理 N2O",
-          title: `第 ${index + 1} 条养殖记录未配置粪污管理 N2O 路径`,
-          detail: "建议补充该畜种的管理方式路径。",
+          title: `第 ${index + 1} 条养殖记录未配置粪污管理 N2O`,
+          detail: "建议为该畜种配置推荐因子法或参数法。",
           link: "/project/manure-n2o",
         });
-      } else if (!approx100(totalShare)) {
-        pushItem(items, {
-          id: `manure-n2o-share-${index}`,
-          severity: "error",
-          section: "粪污管理 N2O",
-          title: `第 ${index + 1} 条养殖记录的 N2O 管理方式占比未闭合`,
-          detail: `当前占比合计为 ${totalShare.toFixed(2)}%，应接近 100%。`,
-          link: "/project/manure-n2o",
-        });
+        return;
+      }
+
+      const parameterRows = rowsForIndex.filter(
+        (row) => row.method === "parameterCalculation"
+      );
+
+      if (parameterRows.length > 0) {
+        const totalShare = parameterRows.reduce(
+          (sum, row) => sum + safeNumber(row.sharePercent),
+          0
+        );
+
+        if (!approx100(totalShare)) {
+          pushItem(items, {
+            id: `manure-n2o-share-${index}`,
+            severity: "error",
+            section: "粪污管理 N2O",
+            title: `第 ${index + 1} 条养殖记录的 N2O 参数法占比未闭合`,
+            detail: `当前参数法路径占比合计为 ${totalShare.toFixed(2)}%，应接近 100%。`,
+            link: "/project/manure-n2o",
+          });
+        }
       }
     });
+
+    if (indicesCovered.size > 0) {
+      pushItem(items, {
+        id: "manure-n2o-ok",
+        severity: "ok",
+        section: "粪污管理 N2O",
+        title: "粪污管理 N2O 模块已建立对应关系",
+        detail: `共 ${manureN2O.length} 条路径。`,
+        link: "/project/manure-n2o",
+      });
+    }
   }
 
   // 能源模块
@@ -325,48 +730,6 @@ export function runProjectChecks(draft: ProjectDraft): ProjectCheckResult {
       detail: "如果场区存在购入或输出电力/热力，请补充录入。",
       link: "/project/energy",
     });
-  } else {
-    const eb = draft.energyBalance!;
-    const purchasedElectricityMismatch =
-      safeNumber(eb.purchasedElectricityMWh) > 0 &&
-      safeNumber(eb.purchasedElectricityEFtCO2PerMWh) <= 0;
-
-    const purchasedHeatMismatch =
-      safeNumber(eb.purchasedHeatGJ) > 0 &&
-      safeNumber(eb.purchasedHeatEFtCO2PerGJ) <= 0;
-
-    const exportedElectricityMismatch =
-      safeNumber(eb.exportedElectricityMWh) > 0 &&
-      safeNumber(eb.exportedElectricityEFtCO2PerMWh) <= 0;
-
-    const exportedHeatMismatch =
-      safeNumber(eb.exportedHeatGJ) > 0 &&
-      safeNumber(eb.exportedHeatEFtCO2PerGJ) <= 0;
-
-    if (
-      purchasedElectricityMismatch ||
-      purchasedHeatMismatch ||
-      exportedElectricityMismatch ||
-      exportedHeatMismatch
-    ) {
-      pushItem(items, {
-        id: "energy-balance-factor-missing",
-        severity: "error",
-        section: "购入/输出电力热力",
-        title: "购入/输出电力热力存在活动数据但缺少因子",
-        detail: "请检查电力和热力的排放因子是否已填写。",
-        link: "/project/energy",
-      });
-    } else {
-      pushItem(items, {
-        id: "energy-balance-ok",
-        severity: "ok",
-        section: "购入/输出电力热力",
-        title: "购入/输出电力热力参数已填写",
-        detail: "已具备计算条件。",
-        link: "/project/energy",
-      });
-    }
   }
 
   const errorCount = items.filter((item) => item.severity === "error").length;

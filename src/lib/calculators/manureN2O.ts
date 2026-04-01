@@ -4,9 +4,11 @@ export interface ManureN2ORowResult {
   sourceLivestockIndex: number;
   species: string;
   stage: string;
+  method: string;
   managementSystem: string;
   annualAverageHead: number;
   sharePercent: number;
+  regionalEmissionFactor: number;
   nexKgNPerHeadYear: number;
   ef3KgN2ONPerKgN: number;
   managedNitrogenKgPerYear: number;
@@ -47,6 +49,31 @@ export function calcManureN2O(
   const rows: ManureN2ORowResult[] = manureRows.map((row) => {
     const livestock = livestockRows[row.sourceLivestockIndex];
     const annualAverageHead = safeNumber(livestock?.annualAverageHead);
+
+    if (row.method === "regionalDefaultEF") {
+      const regionalEmissionFactor = safeNumber(row.regionalEmissionFactor);
+      const rowN2OKgPerYear = annualAverageHead * regionalEmissionFactor;
+      const rowN2OTPerYear = rowN2OKgPerYear / 1000;
+
+      return {
+        sourceLivestockIndex: row.sourceLivestockIndex,
+        species: row.species,
+        stage: row.stage,
+        method: row.method,
+        managementSystem: "区域化推荐因子法",
+        annualAverageHead,
+        sharePercent: 100,
+        regionalEmissionFactor,
+        nexKgNPerHeadYear: 0,
+        ef3KgN2ONPerKgN: 0,
+        managedNitrogenKgPerYear: 0,
+        rowN2ONKgPerYear: 0,
+        emissionFactorKgN2OPerHeadYear: regionalEmissionFactor,
+        rowN2OKgPerYear,
+        rowN2OTPerYear,
+      };
+    }
+
     const sharePercent = safeNumber(row.sharePercent);
     const nexKgNPerHeadYear = safeNumber(row.nexKgNPerHeadYear);
     const ef3KgN2ONPerKgN = safeNumber(row.ef3KgN2ONPerKgN);
@@ -66,9 +93,11 @@ export function calcManureN2O(
       sourceLivestockIndex: row.sourceLivestockIndex,
       species: row.species,
       stage: row.stage,
-      managementSystem: row.managementSystem,
+      method: row.method,
+      managementSystem: row.managementSystem ?? "",
       annualAverageHead,
       sharePercent,
+      regionalEmissionFactor: 0,
       nexKgNPerHeadYear,
       ef3KgN2ONPerKgN,
       managedNitrogenKgPerYear,
@@ -90,26 +119,32 @@ export function calcManureN2O(
         species: row.species,
         stage: row.stage,
         annualAverageHead: row.annualAverageHead,
-        shareTotalPercent: row.sharePercent,
+        shareTotalPercent: row.method === "regionalDefaultEF" ? 100 : row.sharePercent,
         emissionFactorKgN2OPerHeadYear: row.emissionFactorKgN2OPerHeadYear,
         totalN2OKgPerYear: row.rowN2OKgPerYear,
         totalN2OTPerYear: row.rowN2OTPerYear,
-        isShareBalanced: false,
+        isShareBalanced: row.method === "regionalDefaultEF",
       });
       continue;
     }
 
-    existing.shareTotalPercent += row.sharePercent;
+    existing.shareTotalPercent +=
+      row.method === "regionalDefaultEF" ? 100 : row.sharePercent;
     existing.emissionFactorKgN2OPerHeadYear += row.emissionFactorKgN2OPerHeadYear;
     existing.totalN2OKgPerYear += row.rowN2OKgPerYear;
     existing.totalN2OTPerYear += row.rowN2OTPerYear;
+
+    if (row.method === "regionalDefaultEF") {
+      existing.isShareBalanced = true;
+    }
   }
 
   const groups = Array.from(groupMap.values())
     .sort((a, b) => a.sourceLivestockIndex - b.sourceLivestockIndex)
     .map((group) => ({
       ...group,
-      isShareBalanced: Math.abs(group.shareTotalPercent - 100) < 0.5,
+      isShareBalanced:
+        group.isShareBalanced || Math.abs(group.shareTotalPercent - 100) < 0.5,
     }));
 
   const totalN2OKgPerYear = rows.reduce(

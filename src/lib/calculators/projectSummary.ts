@@ -21,10 +21,14 @@ export interface ProjectSummaryResult {
   totalN2OTPerYear: number;
   totalCO2TPerYear: number;
   totalCO2eTPerYear: number;
+
   fossilFuelCO2TPerYear: number;
   purchasedEnergyCO2TPerYear: number;
   exportedEnergyCO2TPerYear: number;
   netPurchasedEnergyCO2TPerYear: number;
+
+  energyModuleTotalCO2TPerYear: number;
+  energyModuleTotalCO2eTPerYear: number;
 }
 
 function safeNumber(value: unknown): number {
@@ -62,14 +66,22 @@ export function calcProjectSummary(
   const entericCH4TPerYear = safeNumber(enteric.totalCH4TPerYear);
   const manureCH4TPerYear = safeNumber(manureCH4.totalCH4TPerYear);
   const manureN2OTPerYear = safeNumber(manureN2O.totalN2OTPerYear);
+
   const fossilFuelCO2TPerYear = safeNumber(fossilFuel.totalCO2TPerYear);
   const purchasedEnergyCO2TPerYear = safeNumber(
     energyBalance.totalPurchasedTCO2
   );
-  const exportedEnergyCO2TPerYear = safeNumber(energyBalance.totalExportedTCO2);
+  const exportedEnergyCO2TPerYear = safeNumber(
+    energyBalance.totalExportedTCO2
+  );
   const netPurchasedEnergyCO2TPerYear = safeNumber(
     energyBalance.netPurchasedTCO2
   );
+
+  const energyModuleTotalCO2TPerYear =
+    fossilFuelCO2TPerYear + netPurchasedEnergyCO2TPerYear;
+
+  const energyModuleTotalCO2eTPerYear = energyModuleTotalCO2TPerYear;
 
   const modules: ProjectSummaryModule[] = [
     {
@@ -111,8 +123,7 @@ export function calcProjectSummary(
 
   const totalCH4TPerYear = entericCH4TPerYear + manureCH4TPerYear;
   const totalN2OTPerYear = manureN2OTPerYear;
-  const totalCO2TPerYear =
-    fossilFuelCO2TPerYear + netPurchasedEnergyCO2TPerYear;
+  const totalCO2TPerYear = energyModuleTotalCO2TPerYear;
 
   const totalCO2eTPerYear = modules.reduce(
     (sum, item) => sum + item.co2eTPerYear,
@@ -131,5 +142,7 @@ export function calcProjectSummary(
     purchasedEnergyCO2TPerYear,
     exportedEnergyCO2TPerYear,
     netPurchasedEnergyCO2TPerYear,
+    energyModuleTotalCO2TPerYear,
+    energyModuleTotalCO2eTPerYear,
   };
 }

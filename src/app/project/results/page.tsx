@@ -1,7 +1,7 @@
 'use client';
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { calcProjectSummary } from "@/lib/calculators/projectSummary";
 import { loadProjectDraft } from "@/lib/utils/projectDraftStorage";
@@ -9,14 +9,37 @@ import type { ProjectDraft } from "@/types/ghg";
 
 export default function ResultsPage() {
   const [draft, setDraft] = useState<ProjectDraft | null>(null);
-  const [gwpCH4, setGwpCH4] = useState(28);
-  const [gwpN2O, setGwpN2O] = useState(265);
+  const [gwpCH4, setGwpCH4] = useState(27.9);
+  const [gwpN2O, setGwpN2O] = useState(273);
+  const [statusMessage, setStatusMessage] = useState("");
 
-  useEffect(() => {
+  const refreshDraft = useCallback(() => {
     const loaded = loadProjectDraft();
     if (!loaded) return;
     setDraft(loaded);
+    setStatusMessage(`已刷新总结果页数据：${new Date().toLocaleTimeString()}`);
   }, []);
+
+  useEffect(() => {
+    refreshDraft();
+  }, [refreshDraft]);
+
+  useEffect(() => {
+    const handleFocus = () => refreshDraft();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshDraft();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [refreshDraft]);
 
   const summary = useMemo(() => {
     if (!draft) return null;
@@ -77,6 +100,14 @@ export default function ResultsPage() {
           </div>
 
           <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={refreshDraft}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
+            >
+              刷新结果
+            </button>
+
             <Link
               href="/project/energy"
               className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
@@ -96,7 +127,7 @@ export default function ResultsPage() {
           <section className={`${cardClass} xl:col-span-1`}>
             <h2 className="text-lg font-semibold">1. CO₂e 换算参数</h2>
             <p className="mt-2 text-sm text-slate-600">
-              这里先做成可调参数，避免提前把标准中的换算值写死。后续你确认具体标准口径后，可以再固化到参数库。
+              当前 CH4 默认值可按标准缺省值 27.9 使用。 [oai_citation:0‡GBT 32151.22-2024 温室气体排放核算与报告要求 第22部分：畜禽养殖企业.pdf](sediment://file_00000000aad071f8b7ab84c64985340c)
             </p>
 
             <div className="mt-4 space-y-4">
@@ -125,6 +156,10 @@ export default function ResultsPage() {
                   className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
                 />
               </label>
+
+              {statusMessage ? (
+                <p className="text-xs text-slate-500">{statusMessage}</p>
+              ) : null}
             </div>
           </section>
 
@@ -156,16 +191,20 @@ export default function ResultsPage() {
                 {summary.fossilFuelCO2TPerYear.toFixed(3)} tCO₂/yr
               </div>
               <div className={readonlyClass}>
+                净购入电力热力：
+                {summary.netPurchasedEnergyCO2TPerYear.toFixed(3)} tCO₂/yr
+              </div>
+              <div className={readonlyClass}>
+                能源模块总量：
+                {summary.energyModuleTotalCO2TPerYear.toFixed(3)} tCO₂/yr
+              </div>
+              <div className={readonlyClass}>
                 购入电力热力：
                 {summary.purchasedEnergyCO2TPerYear.toFixed(3)} tCO₂/yr
               </div>
               <div className={readonlyClass}>
                 输出电力热力：
                 {summary.exportedEnergyCO2TPerYear.toFixed(3)} tCO₂/yr
-              </div>
-              <div className={readonlyClass}>
-                净购入电力热力：
-                {summary.netPurchasedEnergyCO2TPerYear.toFixed(3)} tCO₂/yr
               </div>
             </div>
           </section>
@@ -201,6 +240,18 @@ export default function ResultsPage() {
                     </td>
                   </tr>
                 ))}
+                <tr>
+                  <td className="border-b border-slate-100 px-3 py-2 font-medium">
+                    能源模块总量
+                  </td>
+                  <td className="border-b border-slate-100 px-3 py-2">CO2</td>
+                  <td className="border-b border-slate-100 px-3 py-2">
+                    {summary.energyModuleTotalCO2TPerYear.toFixed(3)}
+                  </td>
+                  <td className="border-b border-slate-100 px-3 py-2">
+                    {summary.energyModuleTotalCO2eTPerYear.toFixed(3)}
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
