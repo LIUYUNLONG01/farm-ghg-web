@@ -14,6 +14,7 @@ import {
 import {
   farmTypeOptions,
   projectBaseSchema,
+  type ProjectBaseFormInput,
   type ProjectBaseFormValues,
 } from "@/lib/schemas/projectBase";
 import {
@@ -31,7 +32,7 @@ export default function NewProjectPage() {
     formState: { errors, isSubmitting },
     reset,
     watch,
-  } = useForm<ProjectBaseFormValues>({
+  } = useForm<ProjectBaseFormInput, unknown, ProjectBaseFormValues>({
     resolver: zodResolver(projectBaseSchema),
     defaultValues: {
       enterpriseName: "",

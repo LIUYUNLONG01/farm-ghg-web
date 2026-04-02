@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { calcManureCH4 } from "@/lib/calculators/manureCH4";
 import {
   manureCH4Schema,
+  type ManureCH4FormInput,
   type ManureCH4FormValues,
 } from "@/lib/schemas/manureCH4";
 import {
@@ -31,6 +32,11 @@ import type {
 function safeNumber(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
+}
+function toOptionalNumber(value: unknown): number | undefined {
+  if (value === "" || value === null || value === undefined) return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 function fmt(value: unknown, digits = 3): string {
@@ -294,7 +300,7 @@ export default function ManureCH4Page() {
     setValue,
     watch,
     formState: { errors, isSubmitting },
-  } = useForm<ManureCH4FormValues>({
+  } = useForm<ManureCH4FormInput, unknown, ManureCH4FormValues>({
     resolver: zodResolver(manureCH4Schema),
     defaultValues: {
       rows: [],
@@ -357,23 +363,23 @@ export default function ManureCH4Page() {
 
   const calculationPreview = calcManureCH4(
     livestockRows,
-    watchedRows.map((row) => ({
-      sourceLivestockIndex: row.sourceLivestockIndex,
-      species: row.species,
-      stage: row.stage,
+    watchedRows.map((row): ManureCH4Record => ({
+      sourceLivestockIndex: safeNumber(row.sourceLivestockIndex),
+      species: row.species ?? "",
+      stage: row.stage ?? "",
       method: row.method,
-      regionalEmissionFactor: row.regionalEmissionFactor,
+      regionalEmissionFactor: toOptionalNumber(row.regionalEmissionFactor),
       managementSystem: row.managementSystem?.trim()
         ? row.managementSystem.trim()
         : undefined,
-      sharePercent: row.sharePercent,
-      vsKgPerHeadPerDay: row.vsKgPerHeadPerDay,
-      boM3PerKgVS: row.boM3PerKgVS,
-      mcfPercent: row.mcfPercent,
-      parameterSourceType: row.parameterSourceType,
-      parameterSourceLabel: row.parameterSourceLabel,
+      sharePercent: toOptionalNumber(row.sharePercent),
+      vsKgPerHeadPerDay: toOptionalNumber(row.vsKgPerHeadPerDay),
+      boM3PerKgVS: toOptionalNumber(row.boM3PerKgVS),
+      mcfPercent: toOptionalNumber(row.mcfPercent),
+      parameterSourceType: row.parameterSourceType ?? "manual_input",
+      parameterSourceLabel: row.parameterSourceLabel ?? "手工输入",
       notes: row.notes?.trim() ? row.notes.trim() : undefined,
-    }))
+  }))
   );
 
   const groupedIndexes = useMemo(() => {
@@ -393,15 +399,18 @@ export default function ManureCH4Page() {
 
   const replaceRowsForSource = (
     sourceIndex: number,
-    nextRowsForSource: ManureCH4FormValues["rows"]
+    nextRowsForSource: ManureCH4FormInput["rows"]
   ) => {
     const otherRows = watchedRows.filter(
       (row) => row.sourceLivestockIndex !== sourceIndex
     );
 
     const nextRows = [...otherRows, ...nextRowsForSource].sort((a, b) => {
-      if (a.sourceLivestockIndex !== b.sourceLivestockIndex) {
-        return a.sourceLivestockIndex - b.sourceLivestockIndex;
+      const aIndex = safeNumber(a.sourceLivestockIndex);
+      const bIndex = safeNumber(b.sourceLivestockIndex);
+
+      if (aIndex !== bIndex) {
+        return aIndex - bIndex;
       }
       return 0;
     });
@@ -800,8 +809,8 @@ export default function ManureCH4Page() {
                               来源标签：{primaryRow.parameterSourceLabel}
                             </p>
                           </div>
-                          <span className={sourceBadgeClass(primaryRow.parameterSourceType)}>
-                            {getParameterSourceDisplay(primaryRow.parameterSourceType)}
+                          <span className={sourceBadgeClass(primaryRow.parameterSourceType ?? "manual_input")}>
+                            {getParameterSourceDisplay(primaryRow.parameterSourceType ?? "manual_input")}
                           </span>
                         </div>
 

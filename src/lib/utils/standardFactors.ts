@@ -10,7 +10,7 @@ import type {
   ParameterSourceType,
   StandardVersion,
 } from "@/types/ghg";
-
+import type { AppendixCRegionalAnimalFactor } from "@/data/factors/appendixCDefaults";
 type RegionalAnimalField =
   | "dairyCow"
   | "beefCow"
@@ -27,11 +27,17 @@ function normalizeText(input: string): string {
     .trim();
 }
 
-function includesAlias(target: string, aliases: string[]) {
-  const normalizedTarget = normalizeText(target);
-  return aliases.some((alias) =>
-    normalizedTarget.includes(normalizeText(alias))
-  );
+function includesAlias(input: string, aliases: readonly string[]) {
+  const normalizedInput = input.trim().replace(/\s+/g, "");
+
+  return aliases.some((alias) => {
+    const normalizedAlias = alias.trim().replace(/\s+/g, "");
+    return (
+      normalizedInput === normalizedAlias ||
+      normalizedInput.includes(normalizedAlias) ||
+      normalizedAlias.includes(normalizedInput)
+    );
+  });
 }
 
 function getLibrary(standardVersion: StandardVersion) {
@@ -403,7 +409,8 @@ function readRegionalAnimalValue(
   row: AppendixCRegionalAnimalFactor,
   field: RegionalAnimalField
 ): number | null {
-  return row[field];
+  const value = row[field];
+  return typeof value === "number" || value === null ? value : null;
 }
 
 export function getRegionalManureCH4Factor(

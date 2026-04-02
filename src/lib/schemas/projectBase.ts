@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { REGION_OPTIONS } from "@/data/regionStandardOptions";
+
+function preprocessNumber(value: unknown) {
+  if (value === "" || value === null || value === undefined) return undefined;
+  if (typeof value === "number" && Number.isNaN(value)) return undefined;
+
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
 
 export const farmTypeOptions = [
   "奶牛场",
@@ -11,27 +18,31 @@ export const farmTypeOptions = [
   "其他",
 ] as const;
 
+export const standardVersionOptions = [
+  "NYT4243_2022",
+  "GBT32151_22_2024",
+] as const;
+
+export const farmTypeSchema = z.enum(farmTypeOptions);
+export const standardVersionSchema = z.enum(standardVersionOptions);
+
 export const projectBaseSchema = z.object({
-  enterpriseName: z
-    .string()
-    .trim()
-    .min(2, "企业名称至少 2 个字")
-    .max(100, "企业名称最多 100 个字"),
-  year: z.coerce
-    .number()
-    .int()
-    .min(2020, "核算年度不能早于 2020")
-    .max(2100, "核算年度不能晚于 2100"),
-  region: z
-    .string()
-    .trim()
-    .refine(
-      (value) => (REGION_OPTIONS as readonly string[]).includes(value),
-      "请选择标准化地区"
-    ),
-  farmType: z.enum(farmTypeOptions),
-  standardVersion: z.enum(["NYT4243_2022", "GBT32151_22_2024"]),
-  notes: z.string().max(500, "备注最多 500 字").default(""),
+  enterpriseName: z.string().trim().min(1, "请输入企业名称"),
+  year: z.preprocess(
+    preprocessNumber,
+    z
+      .number({
+        error: "核算年度必须为数字",
+      })
+      .int("核算年度必须为整数")
+      .min(2000, "核算年度不能早于 2000")
+      .max(2100, "核算年度不能晚于 2100")
+  ),
+  region: z.string().trim().min(1, "请选择地区"),
+  farmType: farmTypeSchema,
+  standardVersion: standardVersionSchema,
+  notes: z.string().default(""),
 });
 
-export type ProjectBaseFormValues = z.infer<typeof projectBaseSchema>;
+export type ProjectBaseFormInput = z.input<typeof projectBaseSchema>;
+export type ProjectBaseFormValues = z.output<typeof projectBaseSchema>;

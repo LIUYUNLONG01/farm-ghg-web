@@ -3,7 +3,9 @@ import { z } from "zod";
 function preprocessNumber(value: unknown) {
   if (value === "" || value === null || value === undefined) return undefined;
   if (typeof value === "number" && Number.isNaN(value)) return undefined;
-  return Number(value);
+
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 function booleanField() {
@@ -18,8 +20,7 @@ function requiredNonNegativeNumber(label: string) {
     preprocessNumber,
     z
       .number({
-        required_error: `请输入${label}`,
-        invalid_type_error: `${label}必须为数字`,
+        error: `${label}必须为数字`,
       })
       .min(0, `${label}不能小于 0`)
   );
@@ -30,8 +31,7 @@ function requiredZeroToOne(label: string) {
     preprocessNumber,
     z
       .number({
-        required_error: `请输入${label}`,
-        invalid_type_error: `${label}必须为数字`,
+        error: `${label}必须为数字`,
       })
       .min(0, `${label}不能小于 0`)
       .max(1, `${label}不能大于 1`)
@@ -47,7 +47,7 @@ export const fuelRowSchema = z.object({
   parameterSource: z.enum(["fuelPreset", "manual"]),
   parameterSourceLabel: z.string().trim().min(1, "参数来源标签不能为空"),
   isOverridden: booleanField(),
-  notes: z.string().max(300, "备注最多 300 字"),
+  notes: z.string().max(300, "备注最多 300 字").default(""),
 });
 
 export const energyBalanceSchema = z.object({
@@ -66,4 +66,5 @@ export const energyModuleSchema = z.object({
   energyBalance: energyBalanceSchema,
 });
 
-export type EnergyModuleFormValues = z.infer<typeof energyModuleSchema>;
+export type EnergyModuleFormInput = z.input<typeof energyModuleSchema>;
+export type EnergyModuleFormValues = z.output<typeof energyModuleSchema>;

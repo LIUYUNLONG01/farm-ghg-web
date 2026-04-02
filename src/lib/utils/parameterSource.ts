@@ -1,44 +1,97 @@
-import type { ParameterSource } from "@/types/ghg";
+import type { ParameterSource, ParameterSourceType } from "@/types/ghg";
 
 export interface SourceCountSummary {
   total: number;
+
+  // 兼容旧命名
   defaultLibrary: number;
   fuelPreset: number;
   manual: number;
-  overridden: number;
+
+  // 新命名
+  defaultLibraryCount: number;
+  presetTemplateCount: number;
+  manualInputCount: number;
 }
 
-export function getParameterSourceDisplayLabel(source: ParameterSource): string {
-  if (source === "defaultLibrary") return "默认库";
-  if (source === "fuelPreset") return "燃料模板";
+type AnyParameterSource =
+  | ParameterSourceType
+  | ParameterSource
+  | "defaultLibrary"
+  | "fuelPreset"
+  | "manual"
+  | undefined
+  | null;
+
+export function normalizeParameterSource(
+  source: AnyParameterSource
+): ParameterSourceType {
+  if (source === "default_library" || source === "defaultLibrary") {
+    return "default_library";
+  }
+
+  if (source === "preset_template" || source === "fuelPreset") {
+    return "preset_template";
+  }
+
+  if (source === "manual_input" || source === "manual") {
+    return "manual_input";
+  }
+
+  return "manual_input";
+}
+
+export function getParameterSourceDisplayLabel(
+  source: AnyParameterSource
+): string {
+  const normalized = normalizeParameterSource(source);
+
+  if (normalized === "default_library") return "默认库";
+  if (normalized === "preset_template") return "模板";
   return "手工录入";
 }
 
-export function countParameterSources<
-  T extends {
-    parameterSource?: ParameterSource;
-    isOverridden?: boolean;
-  }
->(rows: T[] | undefined): SourceCountSummary {
-  const safeRows = rows ?? [];
+export function countParameterSources(
+  sources: AnyParameterSource[]
+): SourceCountSummary {
+  const summary: SourceCountSummary = {
+    total: sources.length,
 
-  return safeRows.reduce<SourceCountSummary>(
-    (acc, row) => {
-      acc.total += 1;
+    // 旧命名
+    defaultLibrary: 0,
+    fuelPreset: 0,
+    manual: 0,
 
-      if (row.parameterSource === "defaultLibrary") acc.defaultLibrary += 1;
-      if (row.parameterSource === "fuelPreset") acc.fuelPreset += 1;
-      if (row.parameterSource === "manual") acc.manual += 1;
-      if (row.isOverridden) acc.overridden += 1;
+    // 新命名
+    defaultLibraryCount: 0,
+    presetTemplateCount: 0,
+    manualInputCount: 0,
+  };
 
-      return acc;
-    },
-    {
-      total: 0,
-      defaultLibrary: 0,
-      fuelPreset: 0,
-      manual: 0,
-      overridden: 0,
+  for (const source of sources) {
+    const normalized = normalizeParameterSource(source);
+
+    if (normalized === "default_library") {
+      summary.defaultLibrary += 1;
+      summary.defaultLibraryCount += 1;
+      continue;
     }
-  );
+
+    if (normalized === "preset_template") {
+      summary.fuelPreset += 1;
+      summary.presetTemplateCount += 1;
+      continue;
+    }
+
+    summary.manual += 1;
+    summary.manualInputCount += 1;
+  }
+
+  return summary;
+}
+
+export function summarizeParameterSources(
+  sources: AnyParameterSource[]
+): SourceCountSummary {
+  return countParameterSources(sources);
 }

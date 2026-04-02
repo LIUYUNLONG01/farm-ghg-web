@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { calcManureN2O } from "@/lib/calculators/manureN2O";
 import {
   manureN2OSchema,
+  type ManureN2OFormInput,
   type ManureN2OFormValues,
 } from "@/lib/schemas/manureN2O";
 import {
@@ -30,6 +31,11 @@ import type {
 function safeNumber(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
+}
+function toOptionalNumber(value: unknown): number | undefined {
+  if (value === "" || value === null || value === undefined) return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 function fmt(value: unknown, digits = 3): string {
@@ -286,7 +292,7 @@ export default function ManureN2OPage() {
     setValue,
     watch,
     formState: { errors, isSubmitting },
-  } = useForm<ManureN2OFormValues>({
+  } = useForm<ManureN2OFormInput, unknown, ManureN2OFormValues>({
     resolver: zodResolver(manureN2OSchema),
     defaultValues: {
       rows: [],
@@ -348,22 +354,22 @@ export default function ManureN2OPage() {
 
   const calculationPreview = calcManureN2O(
     livestockRows,
-    watchedRows.map((row) => ({
-      sourceLivestockIndex: row.sourceLivestockIndex,
-      species: row.species,
-      stage: row.stage,
+    watchedRows.map((row): ManureN2ORecord => ({
+      sourceLivestockIndex: safeNumber(row.sourceLivestockIndex),
+      species: row.species ?? "",
+      stage: row.stage ?? "",
       method: row.method,
-      regionalEmissionFactor: row.regionalEmissionFactor,
+      regionalEmissionFactor: toOptionalNumber(row.regionalEmissionFactor),
       managementSystem: row.managementSystem?.trim()
         ? row.managementSystem.trim()
         : undefined,
-      sharePercent: row.sharePercent,
-      nexKgNPerHeadYear: row.nexKgNPerHeadYear,
-      ef3KgN2ONPerKgN: row.ef3KgN2ONPerKgN,
-      parameterSourceType: row.parameterSourceType,
-      parameterSourceLabel: row.parameterSourceLabel,
+      sharePercent: toOptionalNumber(row.sharePercent),
+      nexKgNPerHeadYear: toOptionalNumber(row.nexKgNPerHeadYear),
+      ef3KgN2ONPerKgN: toOptionalNumber(row.ef3KgN2ONPerKgN),
+      parameterSourceType: row.parameterSourceType ?? "manual_input",
+      parameterSourceLabel: row.parameterSourceLabel ?? "手工输入",
       notes: row.notes?.trim() ? row.notes.trim() : undefined,
-    }))
+  }))
   );
 
   const groupedIndexes = useMemo(() => {
@@ -383,15 +389,18 @@ export default function ManureN2OPage() {
 
   const replaceRowsForSource = (
     sourceIndex: number,
-    nextRowsForSource: ManureN2OFormValues["rows"]
+    nextRowsForSource: ManureN2OFormInput["rows"]
   ) => {
     const otherRows = watchedRows.filter(
       (row) => row.sourceLivestockIndex !== sourceIndex
     );
 
     const nextRows = [...otherRows, ...nextRowsForSource].sort((a, b) => {
-      if (a.sourceLivestockIndex !== b.sourceLivestockIndex) {
-        return a.sourceLivestockIndex - b.sourceLivestockIndex;
+      const aIndex = safeNumber(a.sourceLivestockIndex);
+      const bIndex = safeNumber(b.sourceLivestockIndex);
+
+      if (aIndex !== bIndex) {
+        return aIndex - bIndex;
       }
       return 0;
     });
@@ -785,8 +794,8 @@ export default function ManureN2OPage() {
                               来源标签：{primaryRow.parameterSourceLabel}
                             </p>
                           </div>
-                          <span className={sourceBadgeClass(primaryRow.parameterSourceType)}>
-                            {getParameterSourceDisplay(primaryRow.parameterSourceType)}
+                          <span className={sourceBadgeClass(primaryRow.parameterSourceType ?? "manual_input")}>
+                            {getParameterSourceDisplay(primaryRow.parameterSourceType ?? "manual_input")}
                           </span>
                         </div>
 

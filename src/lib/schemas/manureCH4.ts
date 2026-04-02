@@ -3,7 +3,9 @@ import { z } from "zod";
 function preprocessNumber(value: unknown) {
   if (value === "" || value === null || value === undefined) return undefined;
   if (typeof value === "number" && Number.isNaN(value)) return undefined;
-  return Number(value);
+
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 function requiredInteger(label: string) {
@@ -11,8 +13,7 @@ function requiredInteger(label: string) {
     preprocessNumber,
     z
       .number({
-        required_error: `请输入${label}`,
-        invalid_type_error: `${label}必须为数字`,
+        error: `${label}必须为数字`,
       })
       .int(`${label}必须为整数`)
       .min(0, `${label}不能小于 0`)
@@ -24,34 +25,6 @@ function optionalNonNegativeNumber() {
     preprocessNumber,
     z.number().min(0, "数值不能小于 0").optional()
   );
-}
-
-function requiredPositiveNumber(label: string) {
-  return z.preprocess(
-    preprocessNumber,
-    z
-      .number({
-        required_error: `请输入${label}`,
-        invalid_type_error: `${label}必须为数字`,
-      })
-      .positive(`${label}必须大于 0`)
-  );
-}
-
-function requiredPercent(label: string, allowZero = false) {
-  let schema = z.preprocess(
-    preprocessNumber,
-    z.number({
-      required_error: `请输入${label}`,
-      invalid_type_error: `${label}必须为数字`,
-    })
-  );
-
-  schema = allowZero
-    ? schema.refine((value) => value >= 0, `${label}不能小于 0`)
-    : schema.refine((value) => value > 0, `${label}必须大于 0`);
-
-  return schema.refine((value) => value <= 100, `${label}不能超过 100`);
 }
 
 const parameterSourceTypeSchema = z.enum([
@@ -70,11 +43,12 @@ export const manureCH4RowSchema = z
     sourceLivestockIndex: requiredInteger("来源索引"),
     species: z.string().trim().min(1, "畜种不能为空"),
     stage: z.string().trim().min(1, "阶段不能为空"),
+
     method: manureCH4MethodSchema,
 
     regionalEmissionFactor: optionalNonNegativeNumber(),
 
-    managementSystem: z.string().trim().optional().default(""),
+    managementSystem: z.string().default(""),
     sharePercent: optionalNonNegativeNumber(),
     vsKgPerHeadPerDay: optionalNonNegativeNumber(),
     boM3PerKgVS: optionalNonNegativeNumber(),
@@ -94,17 +68,17 @@ export const manureCH4RowSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["regionalEmissionFactor"],
-          message: "区域化推荐因子必须大于 0",
+          message: "推荐因子法下，区域化推荐因子必须大于 0",
         });
       }
     }
 
     if (row.method === "parameterCalculation") {
-      if (!row.managementSystem || row.managementSystem.trim() === "") {
+      if (!row.managementSystem || !row.managementSystem.trim()) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["managementSystem"],
-          message: "请输入管理方式",
+          message: "参数法下必须填写管理方式",
         });
       }
 
@@ -112,7 +86,7 @@ export const manureCH4RowSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["sharePercent"],
-          message: "管理方式占比应大于 0 且不超过 100",
+          message: "参数法下，占比必须大于 0 且不超过 100",
         });
       }
 
@@ -120,7 +94,7 @@ export const manureCH4RowSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["vsKgPerHeadPerDay"],
-          message: "VS 必须大于 0",
+          message: "参数法下，VS 必须大于 0",
         });
       }
 
@@ -128,7 +102,7 @@ export const manureCH4RowSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["boM3PerKgVS"],
-          message: "B₀ 必须大于 0",
+          message: "参数法下，B₀ 必须大于 0",
         });
       }
 
@@ -136,7 +110,7 @@ export const manureCH4RowSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["mcfPercent"],
-          message: "MCF 不能小于 0",
+          message: "参数法下，MCF 不能为空且不能小于 0",
         });
       }
     }
@@ -146,4 +120,5 @@ export const manureCH4Schema = z.object({
   rows: z.array(manureCH4RowSchema).min(1, "请至少录入一条粪污管理 CH4 数据"),
 });
 
-export type ManureCH4FormValues = z.infer<typeof manureCH4Schema>;
+export type ManureCH4FormInput = z.input<typeof manureCH4Schema>;
+export type ManureCH4FormValues = z.output<typeof manureCH4Schema>;

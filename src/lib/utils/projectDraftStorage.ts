@@ -16,6 +16,44 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function createEmptyEnergyBalance(): EnergyBalanceRecord {
+  return {
+    purchasedElectricityMWh: 0,
+    purchasedElectricityEFtCO2PerMWh: 0,
+    purchasedHeatGJ: 0,
+    purchasedHeatEFtCO2PerGJ: 0,
+    exportedElectricityMWh: 0,
+    exportedElectricityEFtCO2PerMWh: 0,
+    exportedHeatGJ: 0,
+    exportedHeatEFtCO2PerGJ: 0,
+  };
+}
+
+function normalizeEnergyBalance(
+  value?: Partial<EnergyBalanceRecord>
+): EnergyBalanceRecord {
+  const fallback = createEmptyEnergyBalance();
+
+  return {
+    purchasedElectricityMWh:
+      value?.purchasedElectricityMWh ?? fallback.purchasedElectricityMWh,
+    purchasedElectricityEFtCO2PerMWh:
+      value?.purchasedElectricityEFtCO2PerMWh ??
+      fallback.purchasedElectricityEFtCO2PerMWh,
+    purchasedHeatGJ: value?.purchasedHeatGJ ?? fallback.purchasedHeatGJ,
+    purchasedHeatEFtCO2PerGJ:
+      value?.purchasedHeatEFtCO2PerGJ ?? fallback.purchasedHeatEFtCO2PerGJ,
+    exportedElectricityMWh:
+      value?.exportedElectricityMWh ?? fallback.exportedElectricityMWh,
+    exportedElectricityEFtCO2PerMWh:
+      value?.exportedElectricityEFtCO2PerMWh ??
+      fallback.exportedElectricityEFtCO2PerMWh,
+    exportedHeatGJ: value?.exportedHeatGJ ?? fallback.exportedHeatGJ,
+    exportedHeatEFtCO2PerGJ:
+      value?.exportedHeatEFtCO2PerGJ ?? fallback.exportedHeatEFtCO2PerGJ,
+  };
+}
+
 function createEmptyDraft(): ProjectDraft {
   return {
     base: {
@@ -32,16 +70,7 @@ function createEmptyDraft(): ProjectDraft {
     manureCH4: [],
     manureN2O: [],
     energyFuel: [],
-    energyBalance: {
-      purchasedElectricityMWh: 0,
-      purchasedElectricityEFtCO2PerMWh: 0,
-      purchasedHeatGJ: 0,
-      purchasedHeatEFtCO2PerGJ: 0,
-      exportedElectricityMWh: 0,
-      exportedElectricityEFtCO2PerMWh: 0,
-      exportedHeatGJ: 0,
-      exportedHeatEFtCO2PerGJ: 0,
-    },
+    energyBalance: createEmptyEnergyBalance(),
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
@@ -59,12 +88,13 @@ function readDraft(): ProjectDraft {
 
   try {
     const parsed = JSON.parse(raw) as Partial<ProjectDraft>;
+    const empty = createEmptyDraft();
 
     return {
-      ...createEmptyDraft(),
+      ...empty,
       ...parsed,
       base: {
-        ...createEmptyDraft().base,
+        ...empty.base,
         ...(parsed.base ?? {}),
       },
       livestock: parsed.livestock ?? [],
@@ -73,10 +103,7 @@ function readDraft(): ProjectDraft {
       manureCH4: parsed.manureCH4 ?? [],
       manureN2O: parsed.manureN2O ?? [],
       energyFuel: parsed.energyFuel ?? [],
-      energyBalance: {
-        ...createEmptyDraft().energyBalance,
-        ...(parsed.energyBalance ?? {}),
-      },
+      energyBalance: normalizeEnergyBalance(parsed.energyBalance),
       createdAt: parsed.createdAt ?? nowIso(),
       updatedAt: parsed.updatedAt ?? nowIso(),
     };
@@ -92,15 +119,20 @@ function writeDraft(draft: ProjectDraft) {
 
 function updateDraft(patch: Partial<ProjectDraft>) {
   const current = readDraft();
+
   const next: ProjectDraft = {
     ...current,
     ...patch,
     base: patch.base ? { ...current.base, ...patch.base } : current.base,
     energyBalance: patch.energyBalance
-      ? { ...current.energyBalance, ...patch.energyBalance }
+      ? normalizeEnergyBalance({
+          ...current.energyBalance,
+          ...patch.energyBalance,
+        })
       : current.energyBalance,
     updatedAt: nowIso(),
   };
+
   writeDraft(next);
   return next;
 }

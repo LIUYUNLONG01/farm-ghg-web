@@ -37,6 +37,11 @@ export type ParameterSourceType =
   | "manual_input"
   | "preset_template";
 
+/**
+ * 兼容旧代码中的命名
+ */
+export type ParameterSource = ParameterSourceType;
+
 export type LivestockProductionPurpose =
   | "泌乳"
   | "后备"

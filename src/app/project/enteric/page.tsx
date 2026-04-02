@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { calcEntericCH4 } from "@/lib/calculators/entericCH4";
 import {
   entericCH4Schema,
+  type EntericCH4FormInput,
   type EntericCH4FormValues,
 } from "@/lib/schemas/entericCH4";
 import {
@@ -41,11 +42,17 @@ const monthFields = [
   { key: "decHead", label: "12月" },
 ] as const;
 
+type EntericFormRowInput = EntericCH4FormInput["rows"][number];
+
 function safeNumber(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
 }
-
+function toOptionalNumber(value: unknown): number | undefined {
+  if (value === "" || value === null || value === undefined) return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
 function fmt(value: unknown, digits = 3): string {
   return safeNumber(value).toFixed(digits);
 }
@@ -95,7 +102,7 @@ function createRowFromLivestock(
   row: LivestockRecord,
   index: number,
   standardVersion: StandardVersion
-) {
+): EntericFormRowInput {
   const defaultFactor =
     buildEntericDefaultsForLivestock(standardVersion, [row])[0];
 
@@ -132,7 +139,7 @@ function createRowFromLivestock(
     annualThroughput: useTurnover ? row.annualOutputHead : undefined,
     daysAlive: useTurnover ? row.feedingDays : undefined,
 
-    method: "defaultEF" as const,
+    method: "defaultEF",
     emissionFactor: defaultFactor?.emissionFactor ?? 0,
     dmiKgPerHeadDay: getLivestockDmiValue(row),
     ymPercent: undefined,
@@ -157,7 +164,7 @@ function syncEntericRowWithLivestock(
   index: number,
   standardVersion: StandardVersion,
   existingRow?: Partial<EntericRecord>
-) {
+): EntericFormRowInput {
   const baseRow = createRowFromLivestock(livestockRow, index, standardVersion);
   const livestockDmi = getLivestockDmiValue(livestockRow);
 
@@ -171,7 +178,7 @@ function syncEntericRowWithLivestock(
     safeNumber(livestockRow.feedingDays) > 0 &&
     safeNumber(livestockRow.feedingDays) < 365;
 
-  const synced = {
+  const synced: EntericFormRowInput = {
     ...baseRow,
 
     sourceLivestockIndex: index,
@@ -179,7 +186,7 @@ function syncEntericRowWithLivestock(
     stage: livestockRow.stage,
 
     activityDataMethod:
-      existingRow.activityDataMethod ??
+      (existingRow.activityDataMethod as EntericFormRowInput["activityDataMethod"]) ??
       (useTurnover ? "turnoverCalculation" : "annualAveragePopulation"),
 
     annualAveragePopulation:
@@ -208,7 +215,7 @@ function syncEntericRowWithLivestock(
     method:
       existingRow.method === "customEF"
         ? "measuredEF"
-        : existingRow.method ?? baseRow.method,
+        : ((existingRow.method as EntericFormRowInput["method"]) ?? baseRow.method),
 
     dmiKgPerHeadDay:
       livestockDmi !== undefined
@@ -297,7 +304,7 @@ export default function EntericPage() {
     setValue,
     watch,
     formState: { errors, isSubmitting },
-  } = useForm<EntericCH4FormValues>({
+  } = useForm<EntericCH4FormInput, unknown, EntericCH4FormValues>({
     resolver: zodResolver(entericCH4Schema),
     defaultValues: {
       rows: [],
@@ -330,41 +337,7 @@ export default function EntericPage() {
     });
 
     reset({
-      rows: syncedRows.map((row) => ({
-        sourceLivestockIndex: row.sourceLivestockIndex,
-        species: row.species,
-        stage: row.stage,
-
-        activityDataMethod: row.activityDataMethod,
-
-        annualAveragePopulation: row.annualAveragePopulation,
-
-        janHead: row.janHead,
-        febHead: row.febHead,
-        marHead: row.marHead,
-        aprHead: row.aprHead,
-        mayHead: row.mayHead,
-        junHead: row.junHead,
-        julHead: row.julHead,
-        augHead: row.augHead,
-        sepHead: row.sepHead,
-        octHead: row.octHead,
-        novHead: row.novHead,
-        decHead: row.decHead,
-
-        annualThroughput: row.annualThroughput,
-        daysAlive: row.daysAlive,
-
-        method: row.method,
-        emissionFactor: row.emissionFactor,
-        dmiKgPerHeadDay: row.dmiKgPerHeadDay,
-        ymPercent: row.ymPercent,
-        geMJPerHeadDay: row.geMJPerHeadDay,
-
-        parameterSourceType: row.parameterSourceType,
-        parameterSourceLabel: row.parameterSourceLabel,
-        notes: row.notes ?? "",
-      })),
+      rows: syncedRows,
     });
 
     if (entericDraft.length > 0) {
@@ -378,37 +351,37 @@ export default function EntericPage() {
 
   const calculationPreview = calcEntericCH4(
     livestockRows,
-    watchedRows.map((row) => ({
-      sourceLivestockIndex: row.sourceLivestockIndex,
-      species: row.species,
-      stage: row.stage,
+    watchedRows.map((row): EntericRecord => ({
+      sourceLivestockIndex: safeNumber(row.sourceLivestockIndex),
+      species: row.species ?? "",
+      stage: row.stage ?? "",
 
       activityDataMethod: row.activityDataMethod,
-      annualAveragePopulation: row.annualAveragePopulation,
-      janHead: row.janHead,
-      febHead: row.febHead,
-      marHead: row.marHead,
-      aprHead: row.aprHead,
-      mayHead: row.mayHead,
-      junHead: row.junHead,
-      julHead: row.julHead,
-      augHead: row.augHead,
-      sepHead: row.sepHead,
-      octHead: row.octHead,
-      novHead: row.novHead,
-      decHead: row.decHead,
-      annualThroughput: row.annualThroughput,
-      daysAlive: row.daysAlive,
+      annualAveragePopulation: toOptionalNumber(row.annualAveragePopulation),
+      janHead: toOptionalNumber(row.janHead),
+      febHead: toOptionalNumber(row.febHead),
+      marHead: toOptionalNumber(row.marHead),
+      aprHead: toOptionalNumber(row.aprHead),
+      mayHead: toOptionalNumber(row.mayHead),
+      junHead: toOptionalNumber(row.junHead),
+      julHead: toOptionalNumber(row.julHead),
+      augHead: toOptionalNumber(row.augHead),
+      sepHead: toOptionalNumber(row.sepHead),
+      octHead: toOptionalNumber(row.octHead),
+      novHead: toOptionalNumber(row.novHead),
+      decHead: toOptionalNumber(row.decHead),
+      annualThroughput: toOptionalNumber(row.annualThroughput),
+      daysAlive: toOptionalNumber(row.daysAlive),
 
       method: row.method,
-      emissionFactor: Number(row.emissionFactor ?? 0),
-      dmiKgPerHeadDay: row.dmiKgPerHeadDay,
-      ymPercent: row.ymPercent,
-      geMJPerHeadDay: row.geMJPerHeadDay,
+      emissionFactor: safeNumber(row.emissionFactor),
+      dmiKgPerHeadDay: toOptionalNumber(row.dmiKgPerHeadDay),
+      ymPercent: toOptionalNumber(row.ymPercent),
+      geMJPerHeadDay: toOptionalNumber(row.geMJPerHeadDay),
 
       unit: "kg CH4/head/year",
-      parameterSourceType: row.parameterSourceType,
-      parameterSourceLabel: row.parameterSourceLabel,
+      parameterSourceType: row.parameterSourceType ?? "manual_input",
+      parameterSourceLabel: row.parameterSourceLabel ?? "手工输入",
       notes: row.notes?.trim() ? row.notes.trim() : undefined,
     }))
   );
@@ -450,8 +423,8 @@ export default function EntericPage() {
 
     const matched = getEntericDefaultFactor(
       standardVersion,
-      row.species,
-      row.stage
+      row.species ?? "",
+      row.stage ?? ""
     );
 
     if (!matched) {
@@ -494,11 +467,11 @@ export default function EntericPage() {
   };
 
   const applyDefaultFactorForAll = () => {
-    const nextRows = watchedRows.map((row, index) => {
+    const nextRows: EntericFormRowInput[] = watchedRows.map((row, index) => {
       const matched = getEntericDefaultFactor(
         standardVersion,
-        row.species,
-        row.stage
+        row.species ?? "",
+        row.stage ?? ""
       );
       const livestockRow = livestockRows[index];
       const livestockDmi = livestockRow ? getLivestockDmiValue(livestockRow) : undefined;
@@ -512,12 +485,12 @@ export default function EntericPage() {
 
       return {
         ...row,
-        method: "defaultEF" as const,
+        method: "defaultEF",
         emissionFactor: matched.emissionFactor,
         dmiKgPerHeadDay: livestockDmi ?? row.dmiKgPerHeadDay,
         ymPercent: undefined,
         geMJPerHeadDay: undefined,
-        parameterSourceType: "default_library" as const,
+        parameterSourceType: "default_library",
         parameterSourceLabel: `${standardVersion} ${matched.sourceTable}：${matched.label}`,
         notes: mergeNote(
           row.notes,
@@ -553,8 +526,8 @@ export default function EntericPage() {
     if (value === "defaultEF") {
       const matched = getEntericDefaultFactor(
         standardVersion,
-        row.species,
-        row.stage
+        row.species ?? "",
+        row.stage ?? ""
       );
 
       setValue(`rows.${index}.method`, "defaultEF", { shouldValidate: true });
@@ -613,8 +586,8 @@ export default function EntericPage() {
     if (value === "calculatedEF") {
       const ymMatched = getEntericYmDefault(
         standardVersion,
-        row.species,
-        row.stage
+        row.species ?? "",
+        row.stage ?? ""
       );
       const livestockDmi = livestockRow ? getLivestockDmiValue(livestockRow) : undefined;
 
@@ -691,7 +664,7 @@ export default function EntericPage() {
       const previewRow = calculationPreview.rows[index];
 
       return {
-        sourceLivestockIndex: row.sourceLivestockIndex,
+        sourceLivestockIndex: safeNumber(row.sourceLivestockIndex),
         species: row.species.trim(),
         stage: row.stage.trim(),
 
@@ -716,7 +689,7 @@ export default function EntericPage() {
         emissionFactor:
           row.method === "calculatedEF"
             ? previewRow?.emissionFactor ?? 0
-            : row.emissionFactor ?? 0,
+            : safeNumber(row.emissionFactor),
 
         dmiKgPerHeadDay: row.dmiKgPerHeadDay,
         ymPercent: row.ymPercent,
@@ -1035,9 +1008,7 @@ export default function EntericPage() {
                           排放因子获取方式
                         </span>
                         <select
-                          value={
-                            row.method === "customEF" ? "measuredEF" : row.method
-                          }
+                          value={row.method ?? "defaultEF"}
                           onChange={(e) =>
                             handleMethodChange(
                               index,
@@ -1056,7 +1027,7 @@ export default function EntericPage() {
                       </label>
                     </div>
 
-                    {row.method === "defaultEF" || row.method === "measuredEF" ? (
+                    {(row.method === "defaultEF" || row.method === "measuredEF") ? (
                       <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                         <label className="block">
                           <span className="mb-2 block text-sm font-medium text-slate-700">
