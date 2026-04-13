@@ -1,8 +1,14 @@
+/**
+ * 标准因子查询层
+ * 对接 appendixCDefaults.ts（附录 C 数据库），提供按物种/地区/管理方式的模糊匹配查询
+ */
+
 import {
   appendixCDefaultLibrary,
   appendixCManagementSystemAliases,
   appendixCTableLabels,
 } from "@/data/factors/appendixCDefaults";
+import type { AppendixCRegionalAnimalFactor } from "@/data/factors/appendixCDefaults";
 import type {
   EntericRecord,
   FuelCombustionRecord,
@@ -10,7 +16,7 @@ import type {
   ParameterSourceType,
   StandardVersion,
 } from "@/types/ghg";
-import type { AppendixCRegionalAnimalFactor } from "@/data/factors/appendixCDefaults";
+
 type RegionalAnimalField =
   | "dairyCow"
   | "beefCow"
@@ -21,15 +27,11 @@ type RegionalAnimalField =
   | "poultry";
 
 function normalizeText(input: string): string {
-  return input
-    .toLowerCase()
-    .replace(/[\s\-_()/（）·]+/g, "")
-    .trim();
+  return input.toLowerCase().replace(/[\s\-_()/（）·]+/g, "").trim();
 }
 
 function includesAlias(input: string, aliases: readonly string[]) {
   const normalizedInput = input.trim().replace(/\s+/g, "");
-
   return aliases.some((alias) => {
     const normalizedAlias = alias.trim().replace(/\s+/g, "");
     return (
@@ -44,23 +46,18 @@ function getLibrary(standardVersion: StandardVersion) {
   return appendixCDefaultLibrary[standardVersion];
 }
 
-export function getParameterSourceDisplay(
-  type: ParameterSourceType
-): string {
+export function getParameterSourceDisplay(type: ParameterSourceType): string {
   switch (type) {
-    case "default_library":
-      return "默认库";
-    case "preset_template":
-      return "模板带入";
+    case "default_library":  return "默认库";
+    case "preset_template":  return "模板带入";
     case "manual_input":
-    default:
-      return "手工输入";
+    default:                 return "手工输入";
   }
 }
 
-/* -----------------------------
- * C2 / C3：肠道发酵
- * ----------------------------- */
+// ─────────────────────────────────────────────
+// C2 / C3：肠道发酵
+// ─────────────────────────────────────────────
 
 export function getEntericDefaultFactor(
   standardVersion: StandardVersion,
@@ -71,28 +68,14 @@ export function getEntericDefaultFactor(
 
   const exactStageMatch = library.find((item) => {
     const speciesOk = includesAlias(species, item.speciesAliases);
-    const stageOk =
-      !item.stageAliases || includesAlias(stage, item.stageAliases);
+    const stageOk = !item.stageAliases || includesAlias(stage, item.stageAliases);
     return speciesOk && stageOk;
   });
 
-  if (exactStageMatch) {
-    return {
-      ...exactStageMatch,
-      sourceTable: appendixCTableLabels.C3,
-    };
-  }
+  if (exactStageMatch) return { ...exactStageMatch, sourceTable: appendixCTableLabels.C3 };
 
-  const speciesOnlyMatch = library.find((item) =>
-    includesAlias(species, item.speciesAliases)
-  );
-
-  return speciesOnlyMatch
-    ? {
-        ...speciesOnlyMatch,
-        sourceTable: appendixCTableLabels.C3,
-      }
-    : null;
+  const speciesOnlyMatch = library.find((item) => includesAlias(species, item.speciesAliases));
+  return speciesOnlyMatch ? { ...speciesOnlyMatch, sourceTable: appendixCTableLabels.C3 } : null;
 }
 
 export function getEntericYmDefault(
@@ -104,28 +87,14 @@ export function getEntericYmDefault(
 
   const exactStageMatch = library.find((item) => {
     const speciesOk = includesAlias(species, item.speciesAliases);
-    const stageOk =
-      !item.stageAliases || includesAlias(stage, item.stageAliases);
+    const stageOk = !item.stageAliases || includesAlias(stage, item.stageAliases);
     return speciesOk && stageOk;
   });
 
-  if (exactStageMatch) {
-    return {
-      ...exactStageMatch,
-      sourceTable: appendixCTableLabels.C2,
-    };
-  }
+  if (exactStageMatch) return { ...exactStageMatch, sourceTable: appendixCTableLabels.C2 };
 
-  const speciesOnlyMatch = library.find((item) =>
-    includesAlias(species, item.speciesAliases)
-  );
-
-  return speciesOnlyMatch
-    ? {
-        ...speciesOnlyMatch,
-        sourceTable: appendixCTableLabels.C2,
-      }
-    : null;
+  const speciesOnlyMatch = library.find((item) => includesAlias(species, item.speciesAliases));
+  return speciesOnlyMatch ? { ...speciesOnlyMatch, sourceTable: appendixCTableLabels.C2 } : null;
 }
 
 export function buildEntericDefaultsForLivestock(
@@ -133,16 +102,12 @@ export function buildEntericDefaultsForLivestock(
   livestockRows: LivestockRecord[]
 ): EntericRecord[] {
   return livestockRows.map((row, index) => {
-    const matched = getEntericDefaultFactor(
-      standardVersion,
-      row.species,
-      row.stage
-    );
-
+    const matched = getEntericDefaultFactor(standardVersion, row.species, row.stage);
     return {
       sourceLivestockIndex: index,
       species: row.species,
       stage: row.stage,
+      activityDataMethod: "annualAveragePopulation",
       method: "defaultEF",
       emissionFactor: matched?.emissionFactor ?? 0,
       unit: "kg CH4/head/year",
@@ -157,150 +122,108 @@ export function buildEntericDefaultsForLivestock(
   });
 }
 
-/* -----------------------------
- * C1：燃料参数
- * ----------------------------- */
+// ─────────────────────────────────────────────
+// C1：燃料参数（修正字段名 lowHeatValue → lowHeatValueGJPerUnit）
+// ─────────────────────────────────────────────
 
-function buildFuelPresetId(fuel: {
-  fuelCategory: string;
-  fuelName: string;
-  unit: string;
-}) {
+function buildFuelPresetId(fuel: { fuelCategory: string; fuelName: string; unit: string }) {
   return `${fuel.fuelCategory}_${fuel.fuelName}_${fuel.unit}`
     .replace(/[^\w\u4e00-\u9fa5]+/g, "_")
     .replace(/_+/g, "_");
 }
 
-export const fuelPresetLibrary = appendixCDefaultLibrary.GBT32151_22_2024.c1Fuel.map(
-  (item) => ({
-    id: buildFuelPresetId(item),
-    label: `${item.fuelName}（按${item.unit}）`,
-    fuelName: item.fuelName,
-    fuelCategory: item.fuelCategory,
-    unitHint: item.unit,
-    ncvTJPerUnit: item.lowHeatValue,
-    carbonContentTonCPerTJ: item.carbonContent,
-    oxidationFactor: item.oxidationPercent / 100,
-    sourceLabel: appendixCTableLabels.C1,
-    note: `${item.fuelCategory} / ${item.fuelName}`,
-  })
-);
+/**
+ * 燃料模板库（从附录 C 表 C.1 自动生成）
+ * ncvTJPerUnit：GJ/单位 ÷ 1000（统一为 TJ/单位，与 FuelCombustionRecord 字段一致）
+ * carbonContentTonCPerTJ：表C.1 的 10⁻² tC/GJ 原值（计算器内部 /100 换算）
+ * oxidationFactor：% ÷ 100 → 小数
+ */
+export const fuelPresetLibrary = appendixCDefaultLibrary.GBT32151_22_2024.c1Fuel.map((item) => ({
+  id: buildFuelPresetId(item),
+  label: `${item.fuelName}（按${item.unit}）`,
+  fuelName: item.fuelName,
+  fuelCategory: item.fuelCategory,
+  unitHint: item.unit,
+  consumptionUnit: item.consumptionUnit,             // "t" 或 "万Nm3"
+  ncvTJPerUnit: item.lowHeatValueGJPerUnit / 1000,   // GJ/单位 → TJ/单位
+  carbonContentTonCPerTJ: item.carbonContent,        // 10⁻² tC/GJ 原值，计算器负责 /100
+  oxidationFactor: item.oxidationPercent / 100,      // % → 小数
+  sourceLabel: appendixCTableLabels.C1,
+  note: `${item.fuelCategory} / ${item.fuelName}`,
+}));
 
-export function getFuelDefaultByName(
-  standardVersion: StandardVersion,
-  fuelName: string
-) {
+export function getFuelDefaultByName(standardVersion: StandardVersion, fuelName: string) {
   const library = getLibrary(standardVersion).c1Fuel;
-
   const matched = library.find(
     (item) =>
       normalizeText(item.fuelName) === normalizeText(fuelName) ||
       normalizeText(item.fuelName).includes(normalizeText(fuelName)) ||
       normalizeText(fuelName).includes(normalizeText(item.fuelName))
   );
-
-  return matched
-    ? {
-        ...matched,
-        sourceTable: appendixCTableLabels.C1,
-      }
-    : null;
+  return matched ? { ...matched, sourceTable: appendixCTableLabels.C1 } : null;
 }
 
-export function buildFuelRowFromPreset(
-  presetId: string
-): FuelCombustionRecord | null {
+/**
+ * 按 presetId 构造 FuelCombustionRecord
+ * 新增 consumptionUnit 字段，与 ghg.ts FuelCombustionRecord 保持一致
+ */
+export function buildFuelRowFromPreset(presetId: string): FuelCombustionRecord | null {
   const preset = fuelPresetLibrary.find((item) => item.id === presetId);
   if (!preset) return null;
 
   return {
     fuelType: preset.fuelName,
     consumptionAmount: 0,
-    ncvTJPerUnit: preset.ncvTJPerUnit,
-    carbonContentTonCPerTJ: preset.carbonContentTonCPerTJ,
-    oxidationFactor: preset.oxidationFactor,
+    consumptionUnit: preset.consumptionUnit,       // 新增：t 或 万Nm3
+    ncvTJPerUnit: preset.ncvTJPerUnit,             // 已换算为 TJ/单位
+    carbonContentTonCPerTJ: preset.carbonContentTonCPerTJ, // 10⁻² tC/GJ 原值
+    oxidationFactor: preset.oxidationFactor,       // 小数形式
     parameterSourceType: "preset_template",
     parameterSourceLabel: `${preset.sourceLabel}：${preset.label}`,
     notes: `${preset.note}；建议单位：${preset.unitHint}`,
   };
 }
 
-/* -----------------------------
- * C4 / C5：VS / B0
- * ----------------------------- */
+// ─────────────────────────────────────────────
+// C4 / C5：VS / B₀
+// ─────────────────────────────────────────────
 
-export function getManureVSDefault(
-  standardVersion: StandardVersion,
-  species: string
-) {
+export function getManureVSDefault(standardVersion: StandardVersion, species: string) {
   const library = getLibrary(standardVersion).c4VS;
-
-  const matched = library.find((item) =>
-    includesAlias(species, item.speciesAliases)
-  );
-
-  return matched
-    ? {
-        ...matched,
-        sourceTable: appendixCTableLabels.C4,
-      }
-    : null;
+  const matched = library.find((item) => includesAlias(species, item.speciesAliases));
+  return matched ? { ...matched, sourceTable: appendixCTableLabels.C4 } : null;
 }
 
-export function getManureB0Default(
-  standardVersion: StandardVersion,
-  species: string
-) {
+export function getManureB0Default(standardVersion: StandardVersion, species: string) {
   const library = getLibrary(standardVersion).c5B0;
-
-  const matched = library.find((item) =>
-    includesAlias(species, item.speciesAliases)
-  );
-
-  return matched
-    ? {
-        ...matched,
-        sourceTable: appendixCTableLabels.C5,
-      }
-    : null;
+  const matched = library.find((item) => includesAlias(species, item.speciesAliases));
+  return matched ? { ...matched, sourceTable: appendixCTableLabels.C5 } : null;
 }
 
-/* -----------------------------
- * C6 / C9：管理方式相关参数
- * ----------------------------- */
+// ─────────────────────────────────────────────
+// C6 / C9：管理方式相关参数
+// ─────────────────────────────────────────────
 
 function resolveManagementSystemId(managementSystem: string) {
   const matched = appendixCManagementSystemAliases.find((item) =>
     includesAlias(managementSystem, item.aliases)
   );
-
   return matched?.id ?? null;
 }
 
 function mapManagementSystemIdToMCFField(id: string) {
   switch (id) {
-    case "oxidation_pond":
-      return "oxidationPond";
-    case "liquid_storage_natural_crust":
-      return "liquidStorageNaturalCrust";
-    case "liquid_storage_no_crust":
-      return "liquidStorageNoCrust";
-    case "solid_storage":
-      return "solidStorage";
-    case "natural_drying":
-      return "naturalDrying";
-    case "pit_storage_inside_house":
-      return "pitStorageInsideHouse";
-    case "daily_spread":
-      return "dailySpread";
-    case "biogas_tank":
-      return "biogasLeakage";
-    case "compost_and_paddock":
-      return "compostAndPaddock";
-    case "other":
-      return "other";
-    default:
-      return null;
+    case "oxidation_pond":               return "oxidationPond";
+    case "liquid_storage_natural_crust": return "liquidStorageNaturalCrust";
+    case "liquid_storage_no_crust":      return "liquidStorageNoCrust";
+    case "solid_storage":                return "solidStorage";
+    case "natural_drying":               return "naturalDrying";
+    case "pit_storage_inside_house":     return "pitStorageInsideHouse";
+    case "daily_spread":                 return "dailySpread";
+    case "biogas_tank":                  return "biogasLeakage";
+    case "compost_and_paddock":          return "compostAndPaddock";
+    case "other":                        return "other";
+    default:                             return null;
   }
 }
 
@@ -338,70 +261,40 @@ export function getMCFDefault(
   };
 }
 
-export function getDirectN2ONDefault(
-  standardVersion: StandardVersion,
-  managementSystem: string
-) {
+export function getDirectN2ONDefault(standardVersion: StandardVersion, managementSystem: string) {
   const library = getLibrary(standardVersion).c9DirectN2ON;
-
-  const matched = library.find((item) =>
-    includesAlias(managementSystem, item.aliases)
-  );
-
-  return matched
-    ? {
-        ...matched,
-        sourceTable: appendixCTableLabels.C9,
-      }
-    : null;
+  const matched = library.find((item) => includesAlias(managementSystem, item.aliases));
+  return matched ? { ...matched, sourceTable: appendixCTableLabels.C9 } : null;
 }
 
-/* -----------------------------
- * C7 / C10：区域化因子
- * ----------------------------- */
+// ─────────────────────────────────────────────
+// C7 / C10：区域化因子
+// ─────────────────────────────────────────────
 
 function normalizeRegionTokens(provinces: string): string[] {
-  return provinces
-    .split(/[、,，]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+  return provinces.split(/[、,，]/).map((item) => item.trim()).filter(Boolean);
 }
 
 export function resolveRegionGroup(location: string) {
   const library = appendixCDefaultLibrary.GBT32151_22_2024.c7RegionalManureCH4;
-
   for (const row of library) {
-    const provinceTokens = normalizeRegionTokens(row.provinces);
-    if (provinceTokens.some((token) => location.includes(token))) {
-      return row.regionGroup;
-    }
+    const tokens = normalizeRegionTokens(row.provinces);
+    if (tokens.some((token) => location.includes(token))) return row.regionGroup;
   }
-
   return null;
 }
 
 function resolveRegionalAnimalField(species: string): RegionalAnimalField | null {
   const s = normalizeText(species);
-
   if (s.includes("奶牛")) return "dairyCow";
   if (s.includes("肉牛")) return "beefCow";
   if (s.includes("水牛")) return "buffalo";
   if (s.includes("绵羊") || s.includes("sheep")) return "sheep";
   if (s.includes("山羊") || s.includes("goat")) return "goat";
   if (s.includes("猪") || s.includes("pig") || s.includes("swine")) return "pig";
-  if (
-    s.includes("鸡") ||
-    s.includes("禽") ||
-    s.includes("poultry") ||
-    s.includes("broiler") ||
-    s.includes("layer")
-  ) {
-    return "poultry";
-  }
-
+  if (s.includes("鸡") || s.includes("禽") || s.includes("poultry") || s.includes("broiler") || s.includes("layer")) return "poultry";
   if (s.includes("羊")) return "sheep";
   if (s.includes("牛")) return "beefCow";
-
   return null;
 }
 
@@ -421,7 +314,6 @@ export function getRegionalManureCH4Factor(
   const library = getLibrary(standardVersion).c7RegionalManureCH4;
   const regionGroup = resolveRegionGroup(location);
   const animalField = resolveRegionalAnimalField(species);
-
   if (!regionGroup || !animalField) return null;
 
   const row = library.find((item) => item.regionGroup === regionGroup);
@@ -430,13 +322,7 @@ export function getRegionalManureCH4Factor(
   const value = readRegionalAnimalValue(row, animalField);
   if (value === null || value === undefined) return null;
 
-  return {
-    regionGroup,
-    provinces: row.provinces,
-    species,
-    emissionFactor: value,
-    sourceTable: appendixCTableLabels.C7,
-  };
+  return { regionGroup, provinces: row.provinces, species, emissionFactor: value, sourceTable: appendixCTableLabels.C7 };
 }
 
 export function getRegionalDirectN2OFactor(
@@ -447,7 +333,6 @@ export function getRegionalDirectN2OFactor(
   const library = getLibrary(standardVersion).c10RegionalDirectN2O;
   const regionGroup = resolveRegionGroup(location);
   const animalField = resolveRegionalAnimalField(species);
-
   if (!regionGroup || !animalField) return null;
 
   const row = library.find((item) => item.regionGroup === regionGroup);
@@ -456,40 +341,22 @@ export function getRegionalDirectN2OFactor(
   const value = readRegionalAnimalValue(row, animalField);
   if (value === null || value === undefined) return null;
 
-  return {
-    regionGroup,
-    provinces: row.provinces,
-    species,
-    emissionFactor: value,
-    sourceTable: appendixCTableLabels.C10,
-  };
+  return { regionGroup, provinces: row.provinces, species, emissionFactor: value, sourceTable: appendixCTableLabels.C10 };
 }
 
-/* -----------------------------
- * C8：Nex
- * ----------------------------- */
+// ─────────────────────────────────────────────
+// C8：Nex
+// ─────────────────────────────────────────────
 
-export function getNexDefault(
-  standardVersion: StandardVersion,
-  species: string
-) {
+export function getNexDefault(standardVersion: StandardVersion, species: string) {
   const library = getLibrary(standardVersion).c8Nex;
-
-  const matched = library.find((item) =>
-    includesAlias(species, item.speciesAliases)
-  );
-
-  return matched
-    ? {
-        ...matched,
-        sourceTable: appendixCTableLabels.C8,
-      }
-    : null;
+  const matched = library.find((item) => includesAlias(species, item.speciesAliases));
+  return matched ? { ...matched, sourceTable: appendixCTableLabels.C8 } : null;
 }
 
-/* -----------------------------
- * 兼容旧函数：供现有页面继续调用
- * ----------------------------- */
+// ─────────────────────────────────────────────
+// 便捷组合函数（供页面一键带入缺省值）
+// ─────────────────────────────────────────────
 
 export function getManureCH4DefaultFactor(
   standardVersion: StandardVersion,
@@ -499,17 +366,11 @@ export function getManureCH4DefaultFactor(
 ) {
   const vs = getManureVSDefault(standardVersion, species);
   const b0 = getManureB0Default(standardVersion, species);
-  const mcf = getMCFDefault(
-    standardVersion,
-    managementSystem,
-    annualAverageTempOrBand
-  );
-
+  const mcf = getMCFDefault(standardVersion, managementSystem, annualAverageTempOrBand);
   if (!vs || !b0 || !mcf) return null;
 
   return {
-    species,
-    managementSystem,
+    species, managementSystem,
     vsKgPerHeadPerDay: vs.vsKgPerHeadDay,
     boM3PerKgVS: b0.b0M3PerKgVS,
     mcfPercent: mcf.mcfPercent,
@@ -525,12 +386,10 @@ export function getManureN2ODefaultFactor(
 ) {
   const nex = getNexDefault(standardVersion, species);
   const ef3 = getDirectN2ONDefault(standardVersion, managementSystem);
-
   if (!nex || !ef3) return null;
 
   return {
-    species,
-    managementSystem,
+    species, managementSystem,
     nexKgNPerHeadYear: nex.nexKgNPerHeadYear,
     ef3KgN2ONPerKgN: ef3.factorKgN2ONPerKgN,
     sourceLabel: `${nex.sourceTable} / ${ef3.sourceTable}`,
@@ -538,11 +397,6 @@ export function getManureN2ODefaultFactor(
   };
 }
 
-/**
- * 兼容旧页面命名
- * 旧页面仍在导入 commonManagementSystemPresets，
- * 这里直接给一个别名，避免多个页面一起改。
- */
+/** 兼容旧页面命名，直接导出别名 */
 export const commonManagementSystemPresets = appendixCManagementSystemAliases;
-
 export { appendixCTableLabels, appendixCManagementSystemAliases };

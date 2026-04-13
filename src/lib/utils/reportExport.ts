@@ -1,3 +1,8 @@
+/**
+ * 报告导出工具
+ * 支持 JSON、CSV、纯文本三种格式
+ */
+
 import type { ProjectSummaryResult } from "@/lib/calculators/projectSummary";
 import type { ProjectDraft } from "@/types/ghg";
 
@@ -15,7 +20,6 @@ export function triggerDownload(
   mimeType = "text/plain;charset=utf-8"
 ) {
   if (typeof window === "undefined") return;
-
   const blob = new Blob([content], { type: mimeType });
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -54,6 +58,8 @@ export function buildProjectReportObject(
       purchasedEnergyCO2TPerYear: summary.purchasedEnergyCO2TPerYear,
       exportedEnergyCO2TPerYear: summary.exportedEnergyCO2TPerYear,
       netPurchasedEnergyCO2TPerYear: summary.netPurchasedEnergyCO2TPerYear,
+      /** 沼气甲烷回收减项，tCO₂e/yr（对应公式 1 中的 R_CH4_回收） */
+      biogasRecoveryCO2eTPerYear: summary.biogasRecoveryCO2eTPerYear,
       modules: summary.modules,
     },
     dataInventory: {
@@ -61,6 +67,7 @@ export function buildProjectReportObject(
       entericCount: draft.enteric?.length ?? 0,
       manureCH4Count: draft.manureCH4?.length ?? 0,
       manureN2OCount: draft.manureN2O?.length ?? 0,
+      hasBiogasRecovery: Boolean(draft.biogasRecovery),
       energyFuelCount: draft.energyFuel?.length ?? 0,
       hasEnergyBalance: Boolean(draft.energyBalance),
     },
@@ -79,14 +86,7 @@ export function buildModuleSummaryCSV(
   draft: ProjectDraft,
   summary: ProjectSummaryResult
 ): string {
-  const header = [
-    "企业名称",
-    "核算年度",
-    "模块",
-    "气体",
-    "质量(t/yr)",
-    "CO2e(tCO2e/yr)",
-  ];
+  const header = ["企业名称", "核算年度", "模块", "气体", "质量(t/yr)", "CO2e(tCO2e/yr)"];
 
   const rows = summary.modules.map((module) => [
     draft.base.enterpriseName,
@@ -97,9 +97,19 @@ export function buildModuleSummaryCSV(
     module.co2eTPerYear.toFixed(6),
   ]);
 
-  return [header, ...rows]
-    .map((row) => row.map(escapeCSV).join(","))
-    .join("\n");
+  // 沼气回收减项单独列出（co2e 为负值）
+  if (summary.biogasRecoveryCO2eTPerYear > 0) {
+    rows.push([
+      draft.base.enterpriseName,
+      draft.base.year,
+      "沼气甲烷回收利用（减项）",
+      "CH4",
+      (-summary.biogasRecoveryCO2eTPerYear / summary.gwpCH4).toFixed(6),
+      (-summary.biogasRecoveryCO2eTPerYear).toFixed(6),
+    ]);
+  }
+
+  return [header, ...rows].map((row) => row.map(escapeCSV).join(",")).join("\n");
 }
 
 export function buildProjectReportText(
@@ -131,27 +141,20 @@ export function buildProjectReportText(
   lines.push("----------------------------------------");
   summary.modules.forEach((module, index) => {
     lines.push(
-      `${index + 1}. ${module.name} | ${module.gas} | ${module.massTPerYear.toFixed(
-        3
-      )} t/yr | ${module.co2eTPerYear.toFixed(3)} tCO2e/yr`
+      `${index + 1}. ${module.name} | ${module.gas} | ${module.massTPerYear.toFixed(3)} t/yr | ${module.co2eTPerYear.toFixed(3)} tCO2e/yr`
     );
   });
   lines.push("");
 
-  lines.push("三、能源模块补充");
+  lines.push("三、能源与沼气补充");
   lines.push("----------------------------------------");
-  lines.push(
-    `化石燃料燃烧：${summary.fossilFuelCO2TPerYear.toFixed(3)} tCO2/yr`
-  );
-  lines.push(
-    `购入电力热力：${summary.purchasedEnergyCO2TPerYear.toFixed(3)} tCO2/yr`
-  );
-  lines.push(
-    `输出电力热力：${summary.exportedEnergyCO2TPerYear.toFixed(3)} tCO2/yr`
-  );
-  lines.push(
-    `净购入电力热力：${summary.netPurchasedEnergyCO2TPerYear.toFixed(3)} tCO2/yr`
-  );
+  lines.push(`化石燃料燃烧：${summary.fossilFuelCO2TPerYear.toFixed(3)} tCO2/yr`);
+  lines.push(`购入电力热力：${summary.purchasedEnergyCO2TPerYear.toFixed(3)} tCO2/yr`);
+  lines.push(`输出电力热力：${summary.exportedEnergyCO2TPerYear.toFixed(3)} tCO2/yr`);
+  lines.push(`净购入电力热力：${summary.netPurchasedEnergyCO2TPerYear.toFixed(3)} tCO2/yr`);
+  if (summary.biogasRecoveryCO2eTPerYear > 0) {
+    lines.push(`沼气甲烷回收（减项）：-${summary.biogasRecoveryCO2eTPerYear.toFixed(3)} tCO2e/yr`);
+  }
   lines.push("");
 
   lines.push("四、数据量概览");
@@ -160,10 +163,9 @@ export function buildProjectReportText(
   lines.push(`肠道发酵记录：${draft.enteric?.length ?? 0} 条`);
   lines.push(`粪污管理 CH4 记录：${draft.manureCH4?.length ?? 0} 条`);
   lines.push(`粪污管理 N2O 记录：${draft.manureN2O?.length ?? 0} 条`);
+  lines.push(`沼气甲烷回收：${draft.biogasRecovery ? "已录入" : "未录入"}`);
   lines.push(`燃料燃烧记录：${draft.energyFuel?.length ?? 0} 条`);
-  lines.push(
-    `购入/输出电力热力：${draft.energyBalance ? "已录入" : "未录入"}`
-  );
+  lines.push(`购入/输出电力热力：${draft.energyBalance ? "已录入" : "未录入"}`);
 
   return lines.join("\n");
 }
