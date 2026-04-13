@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+farm-ghg-deploy.tar.gz
+deploy.tar.gz
+*.tar.gz
+code
