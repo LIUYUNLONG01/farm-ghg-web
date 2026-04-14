@@ -43,3 +43,5 @@ farm-ghg-deploy.tar.gz
 deploy.tar.gz
 *.tar.gz
 code
+
+/src/generated/prisma
