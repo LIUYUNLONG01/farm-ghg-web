@@ -1,6 +1,6 @@
 /**
- * 项目草稿本地存储工具
- * 数据存储于浏览器 localStorage，键名：farm-ghg-project-draft
+ * 项目草稿存储工具
+ * 优先使用数据库（通过 API），降级使用 localStorage
  */
 
 import type {
@@ -16,7 +16,20 @@ import type {
   ProjectDraft,
 } from "@/types/ghg";
 
-const STORAGE_KEY = "farm-ghg-project-draft";
+// 获取当前项目 ID（从 sessionStorage 或 URL）
+function getCurrentProjectId(): string | null {
+  if (typeof window === "undefined") return null;
+
+  // 优先从 URL 参数读取
+  const params = new URLSearchParams(window.location.search);
+  const urlId = params.get("projectId");
+  if (urlId) {
+    sessionStorage.setItem("currentProjectId", urlId);
+    return urlId;
+  }
+
+  return sessionStorage.getItem("currentProjectId");
+}
 
 function nowIso() {
   return new Date().toISOString();
@@ -35,43 +48,6 @@ function createEmptyEnergyBalance(): EnergyBalanceRecord {
   };
 }
 
-function normalizeEnergyBalance(value?: Partial<EnergyBalanceRecord>): EnergyBalanceRecord {
-  const fallback = createEmptyEnergyBalance();
-  return {
-    purchasedElectricityMWh:       value?.purchasedElectricityMWh       ?? fallback.purchasedElectricityMWh,
-    purchasedElectricityEFtCO2PerMWh: value?.purchasedElectricityEFtCO2PerMWh ?? fallback.purchasedElectricityEFtCO2PerMWh,
-    purchasedHeatGJ:                value?.purchasedHeatGJ                ?? fallback.purchasedHeatGJ,
-    purchasedHeatEFtCO2PerGJ:       value?.purchasedHeatEFtCO2PerGJ       ?? fallback.purchasedHeatEFtCO2PerGJ,
-    exportedElectricityMWh:        value?.exportedElectricityMWh        ?? fallback.exportedElectricityMWh,
-    exportedElectricityEFtCO2PerMWh: value?.exportedElectricityEFtCO2PerMWh ?? fallback.exportedElectricityEFtCO2PerMWh,
-    exportedHeatGJ:                 value?.exportedHeatGJ                 ?? fallback.exportedHeatGJ,
-    exportedHeatEFtCO2PerGJ:        value?.exportedHeatEFtCO2PerGJ        ?? fallback.exportedHeatEFtCO2PerGJ,
-  };
-}
-
-/**
- * 兼容性处理 biogasRecovery 字段
- * 旧草稿（无此字段）读取时返回 undefined，新草稿正常透传
- */
-function normalizeBiogasRecovery(
-  value?: Partial<BiogasRecoveryRecord> | null
-): BiogasRecoveryRecord | undefined {
-  if (!value) return undefined;
-
-  return {
-    selfUsedVolumeM3:          value.selfUsedVolumeM3          ?? 0,
-    selfUsedCH4Fraction:       value.selfUsedCH4Fraction       ?? 0,
-    exportedVolumeM3:          value.exportedVolumeM3          ?? 0,
-    exportedCH4Fraction:       value.exportedCH4Fraction       ?? 0,
-    flaringVolumeM3:           value.flaringVolumeM3           ?? 0,
-    flaringCH4Fraction:        value.flaringCH4Fraction        ?? 0,
-    flaringOxidationFactorPercent: value.flaringOxidationFactorPercent ?? 98,
-    parameterSourceType:       value.parameterSourceType       ?? "manual_input",
-    parameterSourceLabel:      value.parameterSourceLabel      ?? "手工输入",
-    notes:                     value.notes,
-  };
-}
-
 function createEmptyDraft(): ProjectDraft {
   return {
     base: {
@@ -87,7 +63,7 @@ function createEmptyDraft(): ProjectDraft {
     enteric: [],
     manureCH4: [],
     manureN2O: [],
-    biogasRecovery: undefined,  // 沼气回收为可选模块，默认不启用
+    biogasRecovery: undefined,
     energyFuel: [],
     energyBalance: createEmptyEnergyBalance(),
     createdAt: nowIso(),
@@ -95,72 +71,107 @@ function createEmptyDraft(): ProjectDraft {
   };
 }
 
-function readDraft(): ProjectDraft {
-  if (typeof window === "undefined") return createEmptyDraft();
-
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) return createEmptyDraft();
-
+// 从 API 加载项目数据
+async function loadFromAPI(projectId: string): Promise<ProjectDraft | null> {
   try {
-    const parsed = JSON.parse(raw) as Partial<ProjectDraft>;
-    const empty = createEmptyDraft();
+    const res = await fetch(`/api/projects/${projectId}`);
+    if (!res.ok) return null;
+    const { project } = await res.json();
+    if (!project?.data) return createEmptyDraft();
 
+    const data = project.data as Partial<ProjectDraft>;
+    const empty = createEmptyDraft();
     return {
       ...empty,
-      ...parsed,
-      base: {
-        ...empty.base,
-        ...(parsed.base ?? {}),
-      },
-      livestock:     parsed.livestock    ?? [],
-      feedLedger:    parsed.feedLedger   ?? [],
-      enteric:       parsed.enteric      ?? [],
-      manureCH4:     parsed.manureCH4    ?? [],
-      manureN2O:     parsed.manureN2O    ?? [],
-      // biogasRecovery：旧草稿无此字段时返回 undefined，不报错
-      biogasRecovery: normalizeBiogasRecovery(parsed.biogasRecovery ?? undefined),
-      energyFuel:    parsed.energyFuel   ?? [],
-      energyBalance: normalizeEnergyBalance(parsed.energyBalance),
-      createdAt:     parsed.createdAt    ?? nowIso(),
-      updatedAt:     parsed.updatedAt    ?? nowIso(),
+      ...data,
+      base: { ...empty.base, ...(data.base ?? {}) },
+      livestock: data.livestock ?? [],
+      feedLedger: data.feedLedger ?? [],
+      enteric: data.enteric ?? [],
+      manureCH4: data.manureCH4 ?? [],
+      manureN2O: data.manureN2O ?? [],
+      energyFuel: data.energyFuel ?? [],
+      energyBalance: data.energyBalance
+        ? { ...empty.energyBalance, ...data.energyBalance }
+        : empty.energyBalance,
+      createdAt: data.createdAt ?? nowIso(),
+      updatedAt: data.updatedAt ?? nowIso(),
     };
+  } catch {
+    return null;
+  }
+}
+
+// 保存到 API
+async function saveToAPI(projectId: string, draft: ProjectDraft): Promise<void> {
+  try {
+    await fetch(`/api/projects/${projectId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: { ...draft, updatedAt: nowIso() } }),
+    });
+  } catch (e) {
+    console.error("保存失败:", e);
+  }
+}
+
+// localStorage 降级方案
+const LOCAL_KEY = "farm-ghg-project-draft";
+
+function loadFromLocal(): ProjectDraft {
+  if (typeof window === "undefined") return createEmptyDraft();
+  try {
+    const raw = window.localStorage.getItem(LOCAL_KEY);
+    if (!raw) return createEmptyDraft();
+    const parsed = JSON.parse(raw) as Partial<ProjectDraft>;
+    const empty = createEmptyDraft();
+    return { ...empty, ...parsed, base: { ...empty.base, ...(parsed.base ?? {}) } };
   } catch {
     return createEmptyDraft();
   }
 }
 
-function writeDraft(draft: ProjectDraft) {
+function saveToLocal(draft: ProjectDraft) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
-}
-
-function updateDraft(patch: Partial<ProjectDraft>) {
-  const current = readDraft();
-
-  const next: ProjectDraft = {
-    ...current,
-    ...patch,
-    base: patch.base ? { ...current.base, ...patch.base } : current.base,
-    energyBalance: patch.energyBalance
-      ? normalizeEnergyBalance({ ...current.energyBalance, ...patch.energyBalance })
-      : current.energyBalance,
-    // biogasRecovery 直接覆盖（undefined 表示关闭该模块）
-    biogasRecovery:
-      "biogasRecovery" in patch
-        ? normalizeBiogasRecovery(patch.biogasRecovery ?? undefined)
-        : current.biogasRecovery,
-    updatedAt: nowIso(),
-  };
-
-  writeDraft(next);
-  return next;
+  window.localStorage.setItem(LOCAL_KEY, JSON.stringify(draft));
 }
 
 // ── 公开 API ──────────────────────────────────────────────────────────────
 
-export function loadProjectDraft(): ProjectDraft | null {
-  if (typeof window === "undefined") return null;
-  return readDraft();
+export async function loadProjectDraft(): Promise<ProjectDraft | null> {
+  const projectId = getCurrentProjectId();
+  if (projectId) {
+    const draft = await loadFromAPI(projectId);
+    return draft ?? createEmptyDraft();
+  }
+  return loadFromLocal();
+}
+
+async function updateDraft(patch: Partial<ProjectDraft>): Promise<ProjectDraft> {
+  const projectId = getCurrentProjectId();
+
+  if (projectId) {
+    const current = await loadFromAPI(projectId) ?? createEmptyDraft();
+    const next: ProjectDraft = {
+      ...current,
+      ...patch,
+      base: patch.base ? { ...current.base, ...patch.base } : current.base,
+      updatedAt: nowIso(),
+    };
+    await saveToAPI(projectId, next);
+    return next;
+  }
+
+  // 降级：localStorage
+  const current = loadFromLocal();
+  const next: ProjectDraft = {
+    ...current,
+    ...patch,
+    base: patch.base ? { ...current.base, ...patch.base } : current.base,
+    updatedAt: nowIso(),
+  };
+  saveToLocal(next);
+  return next;
 }
 
 export function saveProjectDraft(base: ProjectBase) {
@@ -201,5 +212,5 @@ export function saveEnergyBalanceDraft(balance: EnergyBalanceRecord) {
 
 export function clearProjectDraft() {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(STORAGE_KEY);
+  window.localStorage.removeItem(LOCAL_KEY);
 }

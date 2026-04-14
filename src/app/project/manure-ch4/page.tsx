@@ -213,7 +213,8 @@ export default function ManureCH4Page() {
   const watchedRows = watch("rows") ?? [];
 
   useEffect(() => {
-    const draft = loadProjectDraft();
+    (async () => {
+    const draft = await loadProjectDraft();
     if (!draft) return;
     const livestock = draft.livestock ?? [];
     const manureDraft = draft.manureCH4 ?? [];
@@ -228,6 +229,7 @@ export default function ManureCH4Page() {
       ? "已加载粪污管理 CH₄ 草稿，并按当前养殖活动数据重新同步了畜种和阶段。"
       : "已按当前地区初始化粪污管理 CH₄ 模块。"
     );
+    })();
   }, [reset]);
 
   const calculationPreview = calcManureCH4(

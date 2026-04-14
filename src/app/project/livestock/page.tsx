@@ -217,7 +217,8 @@ export default function LivestockPage() {
   const [statusMessage, setStatusMessage] = useState("");
 
   useEffect(() => {
-    const draft = loadProjectDraft();
+    (async () => {
+    const draft = await loadProjectDraft();
     if (!draft) return;
     setProjectName(draft.base.enterpriseName || "未命名项目");
     if (draft.livestock && draft.livestock.length > 0) setRows(draft.livestock.map(normalizeRowFromDraft));
@@ -225,6 +226,7 @@ export default function LivestockPage() {
     if ((draft.livestock && draft.livestock.length > 0) || (draft.feedLedger && draft.feedLedger.length > 0)) {
       setStatusMessage("已加载养殖活动与饲料台账草稿，并按新结构完成标准化。");
     }
+    })();
   }, []);
 
   // ── shared style tokens ──────────────────────────────────────────────────

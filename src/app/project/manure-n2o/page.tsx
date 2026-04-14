@@ -211,7 +211,8 @@ export default function ManureN2OPage() {
   const watchedRows = watch("rows") ?? [];
 
   useEffect(() => {
-    const draft = loadProjectDraft();
+    (async () => {
+    const draft = await loadProjectDraft();
     if (!draft) return;
     const livestock = draft.livestock ?? [];
     const manureDraft = draft.manureN2O ?? [];
@@ -226,6 +227,7 @@ export default function ManureN2OPage() {
       ? "已加载粪污管理 N₂O 草稿，并按当前养殖活动数据重新同步了畜种和阶段。"
       : "已按当前地区初始化粪污管理 N₂O 模块。"
     );
+    })();
   }, [reset]);
 
   const calculationPreview = calcManureN2O(

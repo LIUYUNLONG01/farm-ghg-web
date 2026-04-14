@@ -61,12 +61,14 @@ export default function EnergyPage() {
   const [statusMessage, setStatusMessage] = useState("");
 
   useEffect(() => {
-    const loaded = loadProjectDraft();
+    (async () => {
+    const loaded = await loadProjectDraft();
     if (!loaded) return;
     setDraft(loaded);
     setFuelRows(loaded.energyFuel ?? []);
     setEnergyBalance(loaded.energyBalance ?? createEmptyEnergyBalance());
     setStatusMessage("已加载浏览器中的能源模块草稿。");
+    })();
   }, []);
 
   const fossilFuelPreview = useMemo(() => calcFossilFuel(fuelRows), [fuelRows]);

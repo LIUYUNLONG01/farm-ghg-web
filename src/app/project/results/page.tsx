@@ -13,8 +13,8 @@ export default function ResultsPage() {
   const [gwpN2O, setGwpN2O] = useState(273);
   const [statusMessage, setStatusMessage] = useState("");
 
-  const refreshDraft = useCallback(() => {
-    const loaded = loadProjectDraft();
+  const refreshDraft = useCallback(async () => {
+    const loaded = await loadProjectDraft();
     if (!loaded) return;
     setDraft(loaded);
     setStatusMessage(`已刷新：${new Date().toLocaleTimeString()}`);

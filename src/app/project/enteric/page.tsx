@@ -188,7 +188,8 @@ export default function EntericPage() {
   const watchedRows = watch("rows") ?? [];
 
   useEffect(() => {
-    const draft = loadProjectDraft();
+    (async () => {
+    const draft = await loadProjectDraft();
     if (!draft) return;
     const livestock = draft.livestock ?? [];
     const entericDraft = draft.enteric ?? [];
@@ -204,6 +205,7 @@ export default function EntericPage() {
       ? "已加载肠道发酵草稿，并按当前养殖活动数据重新同步了畜种、阶段和 DMI。"
       : "已按标准版本初始化肠道发酵模块。"
     );
+    })();
   }, [reset]);
 
   const calculationPreview = calcEntericCH4(

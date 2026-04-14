@@ -45,7 +45,8 @@ export default function NewProjectPage() {
   });
 
   useEffect(() => {
-    const draft = loadProjectDraft();
+    (async () => {
+    const draft = await loadProjectDraft();
     if (!draft) return;
 
     const normalizedRegion = normalizeProvinceName(draft.base.region) ?? "北京";
@@ -64,6 +65,7 @@ export default function NewProjectPage() {
     } else {
       setStatusMessage("已加载浏览器中的本地草稿。");
     }
+    })();
   }, [reset]);
 
   const selectedStandard = watch("standardVersion");

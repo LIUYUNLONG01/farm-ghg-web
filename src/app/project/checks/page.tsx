@@ -52,9 +52,11 @@ export default function ChecksPage() {
   const [draft, setDraft] = useState<ProjectDraft | null>(null);
 
   useEffect(() => {
-    const loaded = loadProjectDraft();
+    (async () => {
+    const loaded = await loadProjectDraft();
     if (!loaded) return;
     setDraft(loaded);
+    })();
   }, []);
 
   const checkResult = useMemo(() => {
