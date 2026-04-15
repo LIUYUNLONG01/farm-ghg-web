@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useAutoSave } from "@/lib/hooks/useAutoSave";
+import AutoSaveIndicator from "@/components/AutoSaveIndicator";
 
 import { calcEnergyBalance } from "@/lib/calculators/energyBalance";
 import { calcFossilFuel } from "@/lib/calculators/fossilFuel";
@@ -112,6 +114,16 @@ export default function EnergyPage() {
     saveEnergyBalanceDraft(energyBalance);
     setStatusMessage("已保存能源模块草稿。");
   };
+
+  const autoSaveData = { fuelRows, energyBalance };
+  const autoSaveStatus = useAutoSave(
+    autoSaveData,
+    async () => {
+      await saveEnergyFuelDraft(fuelRows);
+      await saveEnergyBalanceDraft(energyBalance);
+    },
+    2000
+  );
 
   return (
     <main className="min-h-screen bg-gray-50 font-sans text-gray-900">

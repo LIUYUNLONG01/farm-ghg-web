@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useAutoSave } from "@/lib/hooks/useAutoSave";
+import AutoSaveIndicator from "@/components/AutoSaveIndicator";
 
 import {
   DMI_METHOD_OPTIONS,
@@ -335,6 +337,14 @@ export default function LivestockPage() {
     setStatusMessage("已保存养殖活动数据和饲料台账草稿。");
   };
 
+  const autoSaveStatus = useAutoSave(
+    rows,
+    async () => {
+      await saveLivestockDraft(rows, feedLedger);
+    },
+    2000
+  );
+
   return (
     <main className="min-h-screen bg-gray-50 font-sans text-gray-900">
 
@@ -346,7 +356,8 @@ export default function LivestockPage() {
           </div>
           养殖场碳核算平台
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <AutoSaveIndicator status={autoSaveStatus} />
           <Link href="/project/new" className="text-xs px-3 py-1.5 rounded-lg border border-green-100 text-green-700 hover:bg-green-50 transition">返回基础信息</Link>
           <Link href="/" className="text-xs px-3 py-1.5 rounded-lg border border-green-100 text-green-700 hover:bg-green-50 transition">返回首页</Link>
         </div>

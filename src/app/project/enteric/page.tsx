@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useAutoSave } from "@/lib/hooks/useAutoSave";
+import AutoSaveIndicator from "@/components/AutoSaveIndicator";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -412,6 +414,14 @@ export default function EntericPage() {
   }
 
   // ── main render ──────────────────────────────────────────────────────────
+  const autoSaveStatus = useAutoSave(
+    watchedRows,
+    async () => {
+      await saveEntericDraft(watchedRows as EntericRecord[]);
+    },
+    2000
+  );
+
   return (
     <main className="min-h-screen bg-gray-50 font-sans text-gray-900">
 
@@ -423,7 +433,8 @@ export default function EntericPage() {
           </div>
           养殖场碳核算平台
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <AutoSaveIndicator status={autoSaveStatus} />
           <Link href="/project/livestock" className="text-xs px-3 py-1.5 rounded-lg border border-green-100 text-green-700 hover:bg-green-50 transition">返回养殖活动</Link>
           <Link href="/" className="text-xs px-3 py-1.5 rounded-lg border border-green-100 text-green-700 hover:bg-green-50 transition">返回首页</Link>
         </div>
