@@ -363,6 +363,14 @@ export default function ManureCH4Page() {
     setStatusMessage("已保存粪污管理 CH₄ 草稿。");
   };
 
+  const autoSaveStatus = useAutoSave(
+    watchedRows,
+    async () => {
+      await saveManureCH4Draft(watchedRows as ManureCH4Record[]);
+    },
+    2000
+  );
+
   // ── empty state ───────────────────────────────────────────────────────────
   if (livestockRows.length === 0) {
     return (
@@ -395,14 +403,6 @@ export default function ManureCH4Page() {
   }
 
   // ── main render ────────────────────────────────────────────────────────────
-  const autoSaveStatus = useAutoSave(
-    watchedRows,
-    async () => {
-      await saveManureCH4Draft(watchedRows as ManureCH4Record[]);
-    },
-    2000
-  );
-
   return (
     <main className="min-h-screen bg-gray-50 font-sans text-gray-900">
 

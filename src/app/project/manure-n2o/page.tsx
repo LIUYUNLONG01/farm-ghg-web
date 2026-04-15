@@ -360,6 +360,14 @@ export default function ManureN2OPage() {
     setStatusMessage("已保存粪污管理 N₂O 草稿。");
   };
 
+  const autoSaveStatus = useAutoSave(
+    watchedRows,
+    async () => {
+      await saveManureN2ODraft(watchedRows as ManureN2ORecord[]);
+    },
+    2000
+  );
+
   // ── empty state ────────────────────────────────────────────────────────────
   if (livestockRows.length === 0) {
     return (
@@ -392,14 +400,6 @@ export default function ManureN2OPage() {
   }
 
   // ── main render ────────────────────────────────────────────────────────────
-  const autoSaveStatus = useAutoSave(
-    watchedRows,
-    async () => {
-      await saveManureN2ODraft(watchedRows as ManureN2ORecord[]);
-    },
-    2000
-  );
-
   return (
     <main className="min-h-screen bg-gray-50 font-sans text-gray-900">
 

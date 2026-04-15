@@ -382,6 +382,15 @@ export default function EntericPage() {
     setStatusMessage("已保存细化后的肠道发酵 CH4 草稿。");
   };
 
+  // autoSave hook 必须在所有条件 return 之前
+  const autoSaveStatus = useAutoSave(
+    watchedRows,
+    async () => {
+      await saveEntericDraft(watchedRows as EntericRecord[]);
+    },
+    2000
+  );
+
   // ── empty state ──────────────────────────────────────────────────────────
   if (livestockRows.length === 0) {
     return (
@@ -414,14 +423,6 @@ export default function EntericPage() {
   }
 
   // ── main render ──────────────────────────────────────────────────────────
-  const autoSaveStatus = useAutoSave(
-    watchedRows,
-    async () => {
-      await saveEntericDraft(watchedRows as EntericRecord[]);
-    },
-    2000
-  );
-
   return (
     <main className="min-h-screen bg-gray-50 font-sans text-gray-900">
 
