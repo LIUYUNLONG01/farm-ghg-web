@@ -15,8 +15,6 @@ import {
   loadProjectDraft,
   saveManureN2ODraft,
 } from "@/lib/utils/projectDraftStorage";
-import { useAutoSave } from "@/lib/hooks/useAutoSave";
-import AutoSaveIndicator from "@/components/AutoSaveIndicator";
 import {
   commonManagementSystemPresets,
   getManureN2ODefaultFactor,
@@ -392,14 +390,6 @@ export default function ManureN2OPage() {
   }
 
   // ── main render ────────────────────────────────────────────────────────────
-  const autoSaveStatus = useAutoSave(
-    watchedRows,
-    async () => {
-      await saveManureN2ODraft(watchedRows as ManureN2ORecord[]);
-    },
-    2000
-  );
-
   return (
     <main className="min-h-screen bg-gray-50 font-sans text-gray-900">
 

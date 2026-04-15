@@ -15,8 +15,6 @@ import {
   loadProjectDraft,
   saveManureCH4Draft,
 } from "@/lib/utils/projectDraftStorage";
-import { useAutoSave } from "@/lib/hooks/useAutoSave";
-import AutoSaveIndicator from "@/components/AutoSaveIndicator";
 import {
   commonManagementSystemPresets,
   getManureCH4DefaultFactor,
@@ -395,14 +393,6 @@ export default function ManureCH4Page() {
   }
 
   // ── main render ────────────────────────────────────────────────────────────
-  const autoSaveStatus = useAutoSave(
-    watchedRows,
-    async () => {
-      await saveManureCH4Draft(watchedRows as ManureCH4Record[]);
-    },
-    2000
-  );
-
   return (
     <main className="min-h-screen bg-gray-50 font-sans text-gray-900">
 
