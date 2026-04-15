@@ -36,7 +36,7 @@ export default function MapChart({ stats, totalProjects, totalCO2e, provinceCoun
 
   // 加载中国地图 GeoJSON
   useEffect(() => {
-    fetch("https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json")
+    fetch("/china.json")
       .then((res) => res.json())
       .then((geoJson) => {
         echarts.registerMap("china", geoJson);
