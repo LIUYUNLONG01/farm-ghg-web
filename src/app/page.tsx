@@ -66,7 +66,6 @@ export default async function HomePage() {
 
   return (
     <main className="min-h-screen bg-gray-50 text-gray-900 font-sans">
-
       {/* ── NAV ── */}
       <nav className="sticky top-0 z-50 backdrop-blur-md bg-gray-50/90 border-b border-green-100 px-6 h-14 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold text-green-700 tracking-wide">
@@ -88,7 +87,7 @@ export default async function HomePage() {
               <span className="text-xs text-gray-500 hidden sm:inline">
                 {user.name || user.email}
               </span>
-            <LogoutButton />
+              <LogoutButton />
             </div>
           ) : (
             <Link
@@ -128,7 +127,8 @@ export default async function HomePage() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="/projects" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-green-700 text-white text-sm font-medium shadow-sm transition hover:bg-green-900 hover:-translate-y-px">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-4 h-4">
-                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
                 开始新建项目
               </Link>
@@ -164,7 +164,9 @@ export default async function HomePage() {
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2">
               {standards.map((s) => (
-                <div key={s} className="rounded-xl border border-green-100 bg-white px-3 py-2.5 text-[11px] font-medium text-green-800">{s}</div>
+                <div key={s} className="rounded-xl border border-green-100 bg-white px-3 py-2.5 text-[11px] font-medium text-green-800">
+                  {s}
+                </div>
               ))}
               <div className="col-span-2 rounded-xl border border-green-100 bg-white px-3 py-2.5 text-[11px] font-medium text-green-800">
                 支持推荐因子法、参数法与活动数据驱动核算逻辑
@@ -177,7 +179,8 @@ export default async function HomePage() {
       {/* ── FEATURES ── */}
       <section className="mx-auto max-w-6xl px-6 py-16 lg:px-8">
         <div className="flex items-center gap-2 text-[11px] font-semibold text-green-500 tracking-[0.1em] uppercase mb-2">
-          <span className="inline-block w-4 h-0.5 bg-green-400 rounded" />Core Features
+          <span className="inline-block w-4 h-0.5 bg-green-400 rounded" />
+          Core Features
         </div>
         <h2 className="font-serif text-3xl font-bold tracking-tight text-gray-900">平台核心能力</h2>
         <div className="mt-8 grid gap-5 lg:grid-cols-3">
@@ -198,13 +201,16 @@ export default async function HomePage() {
           <div className="grid gap-10 lg:grid-cols-2 items-start">
             <div>
               <div className="flex items-center gap-2 text-[11px] font-semibold text-green-500 tracking-[0.1em] uppercase mb-2">
-                <span className="inline-block w-4 h-0.5 bg-green-400 rounded" />Workflow
+                <span className="inline-block w-4 h-0.5 bg-green-400 rounded" />
+                Workflow
               </div>
               <h2 className="font-serif text-3xl font-bold tracking-tight text-gray-900">推荐使用流程</h2>
               <div className="mt-6 flex flex-col gap-3">
                 {workflow.map((item, i) => (
                   <div key={item} className="flex items-start gap-4 rounded-2xl border border-green-100 bg-gray-50 p-4 transition hover:bg-white hover:border-green-200">
-                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-green-600 text-white text-xs font-semibold flex items-center justify-center">{i + 1}</div>
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-green-600 text-white text-xs font-semibold flex items-center justify-center">
+                      {i + 1}
+                    </div>
                     <span className="pt-0.5 text-[13px] leading-7 text-gray-700">{item}</span>
                   </div>
                 ))}
@@ -216,7 +222,8 @@ export default async function HomePage() {
               {flowNodes.map((n) => (
                 <div key={n.label}>
                   <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-green-50 border border-green-100 text-[13px] text-green-900 font-medium mb-1.5">
-                    <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />{n.label}
+                    <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                    {n.label}
                   </div>
                   <div className="text-center text-green-200 text-base my-1">↓</div>
                 </div>
@@ -224,13 +231,15 @@ export default async function HomePage() {
               <div className="grid grid-cols-2 gap-2 mb-1.5">
                 {flowModules.map((m) => (
                   <div key={m} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-green-50 border border-green-100 text-[12px] text-green-900 font-medium">
-                    <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />{m}
+                    <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+                    {m}
                   </div>
                 ))}
               </div>
               <div className="text-center text-green-200 text-base my-1">↓</div>
               <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-green-100 border border-green-200 text-[13px] text-green-900 font-semibold">
-                <span className="w-2 h-2 rounded-full bg-green-700 flex-shrink-0" />汇总核查 & 报告输出
+                <span className="w-2 h-2 rounded-full bg-green-700 flex-shrink-0" />
+                汇总核查 & 报告输出
               </div>
             </div>
           </div>
@@ -240,7 +249,8 @@ export default async function HomePage() {
       {/* ── MODULES ── */}
       <section className="mx-auto max-w-6xl px-6 py-16 lg:px-8">
         <div className="flex items-center gap-2 text-[11px] font-semibold text-green-500 tracking-[0.1em] uppercase mb-2">
-          <span className="inline-block w-4 h-0.5 bg-green-400 rounded" />Modules
+          <span className="inline-block w-4 h-0.5 bg-green-400 rounded" />
+          Modules
         </div>
         <h2 className="font-serif text-3xl font-bold tracking-tight text-gray-900">核算模块导航</h2>
         <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -248,24 +258,15 @@ export default async function HomePage() {
             <Link key={item.name} href={item.path} className="group rounded-2xl border border-green-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-green-400 hover:shadow-md">
               <div className="flex items-start justify-between gap-4">
                 <h3 className="text-[14px] font-semibold text-gray-900 leading-snug">{item.name}</h3>
-                <span className="flex-shrink-0 text-[11px] px-2 py-1 rounded-md border border-green-100 text-green-600 font-medium transition group-hover:bg-green-50 group-hover:border-green-400">进入 →</span>
+                <span className="flex-shrink-0 text-[11px] px-2 py-1 rounded-md border border-green-100 text-green-600 font-medium transition group-hover:bg-green-50 group-hover:border-green-400">
+                  进入 →
+                </span>
               </div>
               <p className="mt-3 text-[12px] leading-6 text-gray-400">{item.summary}</p>
             </Link>
           ))}
         </div>
       </section>
-
-      {/* ── FOOTER ── */}
-      <footer className="bg-gray-900 border-t border-green-900/40 px-6 py-6">
-        <div className="mx-auto max-w-6xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-gray-500">
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-600" />
-            养殖场温室气体排放核算平台
-          </div>
-          <div>{new Date().getFullYear()} · farmghg.cn</div>
-        </div>
-      </footer>
     </main>
   );
 }
