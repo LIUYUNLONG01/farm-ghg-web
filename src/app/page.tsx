@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
 import Link from "next/link";
+import LogoutButton from "@/components/LogoutButton";
 
 const coreFeatures = [
   {
@@ -87,14 +88,7 @@ export default async function HomePage() {
               <span className="text-xs text-gray-500 hidden sm:inline">
                 {user.name || user.email}
               </span>
-              <form action="/api/auth/logout" method="POST">
-                <button
-                  type="submit"
-                  className="text-xs px-3 py-1.5 rounded-lg border border-green-100 text-green-700 hover:bg-green-50 transition"
-                >
-                  退出登录
-                </button>
-              </form>
+            <LogoutButton />
             </div>
           ) : (
             <Link
