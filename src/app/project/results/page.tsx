@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { calcProjectSummary } from "@/lib/calculators/projectSummary";
-import { loadProjectDraft } from "@/lib/utils/projectDraftStorage";
+import { loadProjectDraft, updateSummaryDraft } from "@/lib/utils/projectDraftStorage";
 import type { ProjectDraft } from "@/types/ghg";
 
 export default function ResultsPage() {
@@ -39,6 +39,19 @@ export default function ResultsPage() {
     if (!draft) return null;
     return calcProjectSummary(draft, Number(gwpCH4 || 0), Number(gwpN2O || 0));
   }, [draft, gwpCH4, gwpN2O]);
+
+  // 自动保存汇总结果到数据库，供地图统计使用
+  useEffect(() => {
+    if (!summary) return;
+    updateSummaryDraft({
+      totalCO2eTPerYear: summary.totalCO2eTPerYear,
+      totalCH4TPerYear: summary.totalCH4TPerYear,
+      totalN2OTPerYear: summary.totalN2OTPerYear,
+      totalCO2TPerYear: summary.totalCO2TPerYear,
+      gwpCH4: summary.gwpCH4,
+      gwpN2O: summary.gwpN2O,
+    });
+  }, [summary]);
 
   if (!draft) {
     return (

@@ -214,3 +214,15 @@ export function clearProjectDraft() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(LOCAL_KEY);
 }
+
+export async function updateSummaryDraft(summary: Record<string, number>) {
+  const projectId = getCurrentProjectId();
+  if (!projectId) return;
+  try {
+    const current = await loadFromAPI(projectId) ?? createEmptyDraft();
+    const next = { ...current, summary, updatedAt: nowIso() };
+    await saveToAPI(projectId, next);
+  } catch (e) {
+    console.error("保存汇总失败:", e);
+  }
+}
