@@ -21,6 +21,8 @@ import {
   loadProjectDraft,
   saveProjectDraft,
 } from "@/lib/utils/projectDraftStorage";
+import { useAutoSave } from "@/lib/hooks/useAutoSave";
+import AutoSaveIndicator from "@/components/AutoSaveIndicator";
 
 export default function NewProjectPage() {
   const currentYear = new Date().getFullYear();
@@ -70,6 +72,18 @@ export default function NewProjectPage() {
 
   const selectedStandard = watch("standardVersion");
   const selectedRegion = watch("region");
+  const watchedValues = watch();
+
+  const autoSaveStatus = useAutoSave(
+    watchedValues,
+    async (values) => {
+      const result = projectBaseSchema.safeParse(values);
+      if (result.success) {
+        await saveProjectDraft(result.data);
+      }
+    },
+    2000
+  );
   const selectedStandardLabel = standardOptions.find((item) => item.value === selectedStandard)?.label ?? "未选择";
   const selectedRegionGroup = getRegionGroupByProvince(selectedRegion) ?? "未识别区域组";
 

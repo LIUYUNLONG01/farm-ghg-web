@@ -20,6 +20,8 @@ import {
   loadProjectDraft,
   saveLivestockDraft,
 } from "@/lib/utils/projectDraftStorage";
+import { useAutoSave } from "@/lib/hooks/useAutoSave";
+import AutoSaveIndicator from "@/components/AutoSaveIndicator";
 import type {
   DMIAcquisitionMethod,
   FeedLedgerDirection,
@@ -334,6 +336,14 @@ export default function LivestockPage() {
     saveLivestockDraft(normalized, feedLedger);
     setStatusMessage("已保存养殖活动数据和饲料台账草稿。");
   };
+
+  const autoSaveStatus = useAutoSave(
+    rows,
+    async () => {
+      await saveLivestockDraft(rows, feedLedger);
+    },
+    2000
+  );
 
   return (
     <main className="min-h-screen bg-gray-50 font-sans text-gray-900">

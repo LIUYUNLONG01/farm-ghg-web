@@ -10,6 +10,8 @@ import {
   saveEnergyBalanceDraft,
   saveEnergyFuelDraft,
 } from "@/lib/utils/projectDraftStorage";
+import { useAutoSave } from "@/lib/hooks/useAutoSave";
+import AutoSaveIndicator from "@/components/AutoSaveIndicator";
 import {
   buildFuelRowFromPreset,
   fuelPresetLibrary,
@@ -112,6 +114,14 @@ export default function EnergyPage() {
     saveEnergyBalanceDraft(energyBalance);
     setStatusMessage("已保存能源模块草稿。");
   };
+
+  const autoSaveStatus = useAutoSave(
+    fuelRows,
+    async () => {
+      await saveEnergyFuelDraft(fuelRows); await saveEnergyBalanceDraft(energyBalance);
+    },
+    2000
+  );
 
   return (
     <main className="min-h-screen bg-gray-50 font-sans text-gray-900">

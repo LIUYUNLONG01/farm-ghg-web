@@ -15,6 +15,8 @@ import {
   loadProjectDraft,
   saveEntericDraft,
 } from "@/lib/utils/projectDraftStorage";
+import { useAutoSave } from "@/lib/hooks/useAutoSave";
+import AutoSaveIndicator from "@/components/AutoSaveIndicator";
 import {
   buildEntericDefaultsForLivestock,
   getEntericDefaultFactor,
@@ -412,6 +414,14 @@ export default function EntericPage() {
   }
 
   // ── main render ──────────────────────────────────────────────────────────
+  const autoSaveStatus = useAutoSave(
+    watchedRows,
+    async () => {
+      await saveEntericDraft(watchedRows as EntericRecord[]);
+    },
+    2000
+  );
+
   return (
     <main className="min-h-screen bg-gray-50 font-sans text-gray-900">
 
