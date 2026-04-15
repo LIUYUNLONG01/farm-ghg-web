@@ -131,7 +131,8 @@ function syncEntericRowWithLivestock(livestockRow: LivestockRecord, index: numbe
     species: livestockRow.species,
     stage: livestockRow.stage,
     activityDataMethod: (existingRow.activityDataMethod as EntericFormRowInput["activityDataMethod"]) ?? (useTurnover ? "turnoverCalculation" : "annualAveragePopulation"),
-    annualAveragePopulation: existingRow.activityDataMethod === "annualAveragePopulation" ? existingRow.annualAveragePopulation : useTurnover ? undefined : livestockRow.annualAverageHead,
+    // ★ 关键修复：年平均存栏 AP 始终从养殖活动页强制同步，不再被旧草稿覆盖
+    annualAveragePopulation: useTurnover ? undefined : livestockRow.annualAverageHead,
     janHead: existingRow.janHead, febHead: existingRow.febHead, marHead: existingRow.marHead,
     aprHead: existingRow.aprHead, mayHead: existingRow.mayHead, junHead: existingRow.junHead,
     julHead: existingRow.julHead, augHead: existingRow.augHead, sepHead: existingRow.sepHead,
@@ -204,7 +205,7 @@ export default function EntericPage() {
     });
     reset({ rows: syncedRows });
     setStatusMessage(entericDraft.length > 0
-      ? "已加载肠道发酵草稿，并按当前养殖活动数据重新同步了畜种、阶段和 DMI。"
+      ? "已加载肠道发酵草稿，并按当前养殖活动数据重新同步了畜种、阶段、年平均存栏 AP 和 DMI。"
       : "已按标准版本初始化肠道发酵模块。"
     );
     })();
@@ -466,7 +467,7 @@ export default function EntericPage() {
                   活动数据 AP 与因子 EF 录入
                 </h2>
                 <p className="mt-1 text-xs text-gray-400 leading-6 max-w-2xl">
-                  畜种、阶段和 DMI 优先从「养殖活动数据」同步。养殖活动页已录入或反推 DMI 时，这里会优先读取该值。
+                  畜种、阶段、年平均存栏 AP 和 DMI 始终从「养殖活动数据」同步。每次进入本页都会强制读取最新值。
                 </p>
               </div>
               <button
@@ -665,7 +666,7 @@ export default function EntericPage() {
               </div>
             </div>
             <div className="space-y-1 text-xs text-green-700 leading-6">
-              <p>这里的动物/阶段始终跟随养殖活动页同步；当养殖活动页已形成 DMI 时，这里会优先读取该值。</p>
+              <p>这里的动物/阶段、年平均存栏 AP 始终跟随养殖活动页同步；当养殖活动页已形成 DMI 时，这里会优先读取该值。</p>
               {statusMessage && <p className="font-semibold text-green-900 mt-2 pt-2 border-t border-green-200">{statusMessage}</p>}
             </div>
           </section>
