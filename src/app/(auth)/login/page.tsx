@@ -290,7 +290,14 @@ export default function LoginPage() {
         </div>
 
         <p className="absolute bottom-5 text-[11px] text-gray-300">
-          © 2025 养殖场碳核算平台 · 基于 GB/T 32151.22-2024
+          <a
+            href="https://beian.miit.gov.cn/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-gray-200 transition-colors"
+          >
+            京ICP备2026017960号-1
+          </a>
         </p>
       </div>
 
