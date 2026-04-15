@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import InviteCodeManager from "./InviteCodeManager";
+import AdminMapSection from "./AdminMapSection";
 import Link from "next/link";
 
 export default async function AdminPage() {
@@ -24,9 +25,7 @@ export default async function AdminPage() {
   const projects = await db.project.findMany({
     orderBy: { updatedAt: "desc" },
     include: {
-      user: {
-        select: { email: true, name: true },
-      },
+      user: { select: { email: true, name: true } },
     },
   });
 
@@ -47,6 +46,17 @@ export default async function AdminPage() {
       </nav>
 
       <div className="mx-auto max-w-5xl px-6 py-10 space-y-8">
+
+        {/* 地图可视化 */}
+        <section className="rounded-2xl border border-green-100 bg-white shadow-sm">
+          <div className="px-6 pt-5 pb-4 border-b border-green-50">
+            <h2 className="text-base font-semibold text-gray-900">地区分布地图</h2>
+            <p className="text-xs text-gray-400 mt-1">点击省份查看详情，支持缩放和拖拽</p>
+          </div>
+          <div className="px-6 py-5">
+            <AdminMapSection />
+          </div>
+        </section>
 
         {/* 邀请码管理 */}
         <InviteCodeManager inviteCodes={inviteCodes} />
