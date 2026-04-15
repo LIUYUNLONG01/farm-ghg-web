@@ -1,6 +1,9 @@
 'use client';
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
+
+const EmissionCharts = dynamic(() => import("@/components/EmissionCharts"), { ssr: false });
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { calcProjectSummary } from "@/lib/calculators/projectSummary";
