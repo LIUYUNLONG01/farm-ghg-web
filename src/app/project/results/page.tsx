@@ -245,6 +245,15 @@ export default function ResultsPage() {
           </div>
         </section>
 
+        {/* ── 数据可视化图表 ── */}
+        <section className="mt-8">
+          <div className="flex items-center gap-2 text-[11px] font-semibold text-green-500 tracking-[0.1em] uppercase mb-4">
+            <span className="inline-block w-4 h-0.5 bg-green-400 rounded" />
+            数据可视化
+          </div>
+          <EmissionCharts summary={summary} />
+        </section>
+
         {/* BOTTOM ACTIONS */}
         <div className="mt-6 flex flex-wrap gap-3">
           <Link href="/project/energy" className="px-5 py-2.5 rounded-xl border border-green-100 bg-white text-sm font-medium text-green-800 shadow-sm hover:bg-green-50 transition">返回上一页</Link>
