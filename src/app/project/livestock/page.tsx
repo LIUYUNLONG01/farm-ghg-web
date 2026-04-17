@@ -369,22 +369,22 @@ export default function LivestockPage() {
         <div className="mb-8">
           <div className="flex items-center gap-2 text-[11px] font-semibold text-green-500 tracking-[0.1em] uppercase mb-2">
             <span className="inline-block w-4 h-0.5 bg-green-400 rounded" />
-            Livestock Activity
+            养殖活动数据
           </div>
           <h1 className="font-serif text-3xl font-bold tracking-tight text-gray-900">养殖活动数据</h1>
           <p className="mt-2 text-sm text-gray-400">当前项目：{projectName || "未命名项目"}</p>
         </div>
 
-        {/* ── SECTION 1: 群体定义 + 月度动态 + DMI ── */}
+        {/* ── SECTION 1: 群体定义 + 月度动态 + 干物质采食量（DMI） ── */}
         <section className="rounded-2xl border border-green-100 bg-white shadow-sm">
           <div className="flex items-center justify-between p-6 border-b border-green-50">
             <div>
               <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
-                群体定义 + 月度动态 + DMI
+                群体定义 + 月度动态 + 干物质采食量（DMI）
               </h2>
               <p className="mt-1.5 text-xs text-gray-400 leading-6 max-w-2xl">
-                同一条群体记录内同时采集标准动物/阶段、月度动态、生产性能与 DMI 获取方式；自动生成 annualAverageHead / annualOutputHead / feedingDays 供后续模块调用。
+                同一条群体记录内同时采集标准动物/阶段、月度动态、生产性能与干物质采食量（DMI）获取方式；自动生成年平均存栏、年出栏量和饲养天数，供后续模块调用。
               </p>
             </div>
             <button
@@ -507,7 +507,7 @@ export default function LivestockPage() {
                     </div>
 
                     <div className="mt-4 grid gap-3 md:grid-cols-3">
-                      <div className={readonlyClass}>年平均存栏 AP：{fmt(calcAnnualAverageHead(monthlyRecords), 3)}</div>
+                      <div className={readonlyClass}>年平均存栏（AP）：{fmt(calcAnnualAverageHead(monthlyRecords), 3)}</div>
                       <div className={readonlyClass}>年出栏量（自动汇总）：{fmt(calcAnnualOutputHead(monthlyRecords), 0)}</div>
                       <label className="block">
                         <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">年出栏量（可人工校正）</span>
@@ -523,13 +523,13 @@ export default function LivestockPage() {
 
                   {/* production & DMI */}
                   <div className="rounded-xl border border-green-100 bg-gray-50 p-4">
-                    <p className="text-sm font-semibold text-gray-700 mb-4">生产性能与 DMI 获取</p>
+                    <p className="text-sm font-semibold text-gray-700 mb-4">生产性能与干物质采食量（DMI）获取</p>
 
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                       {[
                         { label: "期初平均体重（kg）", key: "openingWeightKg" as const },
                         { label: "期末平均体重（kg）", key: "closingWeightKg" as const },
-                        { label: "平均日增重（kg/d）", key: "averageDailyGainKg" as const },
+                        { label: "平均日增重（kg/日）", key: "averageDailyGainKg" as const },
                         { label: "成熟体重（kg）", key: "matureWeightKg" as const },
                         { label: "泌乳量（kg/年）", key: "milkYieldKgPerYear" as const },
                         { label: "乳脂率（%）", key: "milkFatPercent" as const },
@@ -554,7 +554,7 @@ export default function LivestockPage() {
                       </label>
 
                       <label className="block xl:col-span-2">
-                        <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">DMI 获取方式</span>
+                        <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">干物质采食量（DMI）获取方式</span>
                         <select value={row.dmiMethod ?? "direct_input"} onChange={(e) => updateRow(rowIndex, "dmiMethod", e.target.value as DMIAcquisitionMethod)} className={inputClass}>
                           {DMI_METHOD_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                         </select>
@@ -562,7 +562,7 @@ export default function LivestockPage() {
 
                       {(row.dmiMethod === "direct_input" || row.dmiMethod === "temporary_estimate") && (
                         <label className="block">
-                          <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">DMI（kg DM/头·日）</span>
+                          <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">干物质采食量（DMI）（kg 干物质/头·日）</span>
                           <input
                             type="number" step="any"
                             value={row.dmiKgPerHeadDay ?? ""}
@@ -575,20 +575,20 @@ export default function LivestockPage() {
                       {row.dmiMethod === "feed_ledger" && (
                         <>
                           <div className={readonlyClass}>出库记录：{ledgerPreview?.outboundCount ?? 0} 条</div>
-                          <div className={readonlyClass}>年度干物质：{fmt(ledgerPreview?.totalDryMatterKg, 2)} kg DM</div>
+                          <div className={readonlyClass}>年度干物质：{fmt(ledgerPreview?.totalDryMatterKg, 2)} kg 干物质</div>
                           <div className={readonlyClass}>头日数：{fmt(ledgerPreview?.headDays, 2)}</div>
-                          <div className={readonlyClass}>反推 DMI：{fmt(ledgerPreview?.dmiKgPerHeadDay, 4)} kg DM/头·日</div>
+                          <div className={readonlyClass}>反推干物质采食量（DMI）：{fmt(ledgerPreview?.dmiKgPerHeadDay, 4)} kg 干物质/头·日</div>
                         </>
                       )}
 
                       {(row.dmiMethod === "model_de_placeholder" || row.dmiMethod === "model_nema_placeholder") && (
                         <>
                           <label className="block">
-                            <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">DE（%）</span>
+                            <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">日粮可消化能占总能比例（DE）（%）</span>
                             <input type="number" step="any" value={row.dePercent ?? ""} onChange={(e) => updateRow(rowIndex, "dePercent", e.target.value === "" ? undefined : Number(e.target.value))} className={inputClass} />
                           </label>
                           <label className="block">
-                            <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">NEma（MJ/kg DM）</span>
+                            <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">维持净能（NEma）（MJ/kg 干物质）</span>
                             <input type="number" step="any" value={row.nemaMJPerKgDM ?? ""} onChange={(e) => updateRow(rowIndex, "nemaMJPerKgDM", e.target.value === "" ? undefined : Number(e.target.value))} className={inputClass} />
                           </label>
                         </>
@@ -596,7 +596,7 @@ export default function LivestockPage() {
                     </div>
 
                     <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 leading-6">
-                      选「后续由饲料台账反推」时，系统已按该群体的饲料出库量、含水率和年度 head-days 自动反推 DMI。选「后续按 NEma / DE% 模型估算」时，下一轮再把自动估算公式接上。
+                      选「后续由饲料台账反推」时，系统已按该群体的饲料出库量、含水率和年度头日数自动反推干物质采食量（DMI）。选「后续按维持净能（NEma）/ 日粮可消化能占总能比例（DE）模型估算」时，下一轮再把自动估算公式接上。
                     </div>
                   </div>
 
@@ -619,7 +619,7 @@ export default function LivestockPage() {
                 饲料台账
               </h2>
               <p className="mt-1 text-xs text-gray-400 leading-6">
-                同时保留入库和出库记录。真正用于反推 DMI 的是「出库记录 × 干物质率 ÷ 头日数」。
+                同时保留入库和出库记录。真正用于反推干物质采食量（DMI）的是「出库记录 × 干物质率 ÷ 头日数」。
               </p>
             </div>
             <div className="flex gap-2">
@@ -705,7 +705,7 @@ export default function LivestockPage() {
                 </label>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <div className={readonlyClass}>干物质量：{fmt(entry.quantityTon * 1000 * Math.max(0, 1 - entry.moisturePercent / 100), 2)} kg DM</div>
+                  <div className={readonlyClass}>干物质量：{fmt(entry.quantityTon * 1000 * Math.max(0, 1 - entry.moisturePercent / 100), 2)} kg 干物质</div>
                   <div className={readonlyClass}>方向：{entry.direction === "inbound" ? "入库" : "出库"}</div>
                 </div>
               </div>
@@ -722,12 +722,12 @@ export default function LivestockPage() {
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 mb-4">
             <div className={readonlyClass}>群体记录数：{overallSummary.totalRows}</div>
             <div className={readonlyClass}>年平均存栏合计：{fmt(overallSummary.totalAnnualAverageHead, 3)}</div>
-            <div className={readonlyClass}>已形成 DMI 的群体：{overallSummary.rowsWithDMI}</div>
+            <div className={readonlyClass}>已形成干物质采食量（DMI）的群体：{overallSummary.rowsWithDMI}</div>
             <div className={readonlyClass}>饲料台账记录数：{overallSummary.totalFeedEntries}</div>
           </div>
           <div className="space-y-1.5 text-xs text-green-700 leading-6">
-            <p>这一步已支持：按群体的饲料出库量、含水率和 head-days 自动反推 DMI。</p>
-            <p>后续 enteric 页只要优先读取 livestock.dmiKgPerHeadDay，就能直接用到这里反推出来的 DMI。</p>
+            <p>这一步已支持：按群体的饲料出库量、含水率和头日数自动反推干物质采食量（DMI）。</p>
+            <p>后续肠道发酵页只要优先读取这里形成的干物质采食量（DMI），就能直接复用本页的反推结果。</p>
             {statusMessage && <p className="font-semibold text-green-900 mt-2 pt-2 border-t border-green-200">{statusMessage}</p>}
           </div>
         </section>

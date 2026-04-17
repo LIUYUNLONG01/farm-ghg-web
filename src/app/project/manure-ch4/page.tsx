@@ -57,17 +57,28 @@ function sourceBadgeClass(sourceType: string) {
 }
 function getLivestockDmiSourceLabel(row: LivestockRecord): string {
   switch (row.dmiMethod) {
-    case "direct_input": return "直接录入 DMI";
-    case "feed_ledger": return "按饲料台账反推 DMI";
+    case "direct_input": return "直接录入干物质采食量（DMI）";
+    case "feed_ledger": return "按饲料台账反推干物质采食量（DMI）";
     case "temporary_estimate": return "经验值/台账估计";
-    case "model_nema_placeholder": return "预留 NEma 模型估算";
-    case "model_de_placeholder": return "预留 DE% 模型估算";
+    case "model_nema_placeholder": return "预留维持净能（NEma）模型估算";
+    case "model_de_placeholder": return "预留日粮可消化能占总能比例（DE）模型估算";
     default: return "未提供";
   }
 }
 function getLivestockDmiValue(row: LivestockRecord): number | undefined {
   const dmi = safeNumber(row.dmiKgPerHeadDay);
   return dmi > 0 ? dmi : undefined;
+}
+
+function getManureCH4MethodLabel(method: string | undefined): string {
+  switch (method) {
+    case "regionalDefaultEF":
+      return "推荐因子法";
+    case "parameterCalculation":
+      return "参数法";
+    default:
+      return "未识别";
+  }
 }
 
 function createRegionalRow(row: LivestockRecord, index: number, standardVersion: StandardVersion, projectRegion: string) {
@@ -427,7 +438,7 @@ export default function ManureCH4Page() {
         <div className="mb-8">
           <div className="flex items-center gap-2 text-[11px] font-semibold text-green-500 tracking-[0.1em] uppercase mb-2">
             <span className="inline-block w-4 h-0.5 bg-green-400 rounded" />
-            Manure CH₄
+            粪污管理 CH₄
           </div>
           <h1 className="font-serif text-3xl font-bold tracking-tight text-gray-900">粪污管理 CH₄</h1>
           <p className="mt-2 text-sm text-gray-400">
@@ -446,7 +457,7 @@ export default function ManureCH4Page() {
                 推荐因子法 / 参数法
               </h2>
               <p className="mt-1 text-xs text-gray-400 leading-6 max-w-2xl">
-                参数法沿用 C.4/C.5/C.6，页面会显示当前群体的 DMI、体重、饲养方式和群体类型，作为后续接 VS 自动估算的准备数据。
+                参数法沿用 C.4/C.5/C.6，页面会显示当前群体的干物质采食量（DMI）、体重、饲养方式和群体类型，作为后续接挥发性固体排泄量（VS）自动估算的准备数据。
               </p>
             </div>
 
@@ -491,15 +502,15 @@ export default function ManureCH4Page() {
                       <div className={readonlyClass}>生产功能：{livestockRow.productionPurpose ?? "未填"}</div>
                       <div className={readonlyClass}>群体类型：{livestockRow.populationMode ?? "未填"}</div>
                       <div className={readonlyClass}>饲养方式：{livestockRow.feedingSituation ?? "未填"}</div>
-                      <div className={readonlyClass}>DMI 来源：{getLivestockDmiSourceLabel(livestockRow)}</div>
-                      <div className={readonlyClass}>当前 DMI：{livestockDmi !== undefined ? `${fmt(livestockDmi, 4)} kg DM/头·日` : "未提供"}</div>
+                      <div className={readonlyClass}>干物质采食量（DMI）来源：{getLivestockDmiSourceLabel(livestockRow)}</div>
+                      <div className={readonlyClass}>当前干物质采食量（DMI）：{livestockDmi !== undefined ? `${fmt(livestockDmi, 4)} kg 干物质/头·日` : "未提供"}</div>
                       <div className={readonlyClass}>期初体重：{livestockRow.openingWeightKg !== undefined ? `${fmt(livestockRow.openingWeightKg)} kg` : "未填"}</div>
                       <div className={readonlyClass}>期末体重：{livestockRow.closingWeightKg !== undefined ? `${fmt(livestockRow.closingWeightKg)} kg` : "未填"}</div>
-                      <div className={readonlyClass}>日增重：{livestockRow.averageDailyGainKg !== undefined ? `${fmt(livestockRow.averageDailyGainKg, 4)} kg/d` : "未填"}</div>
+                      <div className={readonlyClass}>日增重：{livestockRow.averageDailyGainKg !== undefined ? `${fmt(livestockRow.averageDailyGainKg, 4)} kg/日` : "未填"}</div>
                     </div>
 
                     <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 leading-6">
-                      活动数据已从养殖活动页贯通到本页。下一轮可继续把 VS 自动估算接上：在有 DMI / 体重 / 群体信息时优先给出「估算值 + 可手工覆盖」模式。
+                      活动数据已从养殖活动页贯通到本页。下一轮可继续把挥发性固体排泄量（VS）自动估算接上：在有干物质采食量（DMI）、体重和群体信息时，优先给出“估算值 + 可手工覆盖”模式。
                     </div>
 
                     {/* regional EF mode */}
@@ -615,17 +626,17 @@ export default function ManureCH4Page() {
                                   {errors.rows?.[rowIndex]?.sharePercent?.message && <p className={errorClass}>{String(errors.rows[rowIndex]?.sharePercent?.message)}</p>}
                                 </label>
                                 <label className="block">
-                                  <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">VS（kg/头·天）</span>
+                                  <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">挥发性固体排泄量（VS）（kg/头·天）</span>
                                   <input type="number" step="any" {...register(`rows.${rowIndex}.vsKgPerHeadPerDay`, { valueAsNumber: true, onChange: () => markRowManual(rowIndex, "手工修改参数法路径") })} className={inputClass} />
                                   {errors.rows?.[rowIndex]?.vsKgPerHeadPerDay?.message && <p className={errorClass}>{String(errors.rows[rowIndex]?.vsKgPerHeadPerDay?.message)}</p>}
                                 </label>
                                 <label className="block">
-                                  <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">B₀（m³/kg VS）</span>
+                                  <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">最大产甲烷潜力（B₀）（m³/kg 挥发性固体）</span>
                                   <input type="number" step="any" {...register(`rows.${rowIndex}.boM3PerKgVS`, { valueAsNumber: true, onChange: () => markRowManual(rowIndex, "手工修改参数法路径") })} className={inputClass} />
                                   {errors.rows?.[rowIndex]?.boM3PerKgVS?.message && <p className={errorClass}>{String(errors.rows[rowIndex]?.boM3PerKgVS?.message)}</p>}
                                 </label>
                                 <label className="block">
-                                  <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">MCF（%）</span>
+                                  <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">甲烷转化系数（MCF）（%）</span>
                                   <input type="number" step="any" {...register(`rows.${rowIndex}.mcfPercent`, { valueAsNumber: true, onChange: () => markRowManual(rowIndex, "手工修改参数法路径") })} className={inputClass} />
                                   {errors.rows?.[rowIndex]?.mcfPercent?.message && <p className={errorClass}>{String(errors.rows[rowIndex]?.mcfPercent?.message)}</p>}
                                 </label>
@@ -664,8 +675,8 @@ export default function ManureCH4Page() {
                 <div className="text-sm font-semibold text-green-900">{projectRegion || "-"} / {regionGroup}</div>
               </div>
               <div className="rounded-xl border border-green-200 bg-white px-4 py-3">
-                <div className="text-xs text-green-600 font-medium mb-1">年度 CH₄ 总量</div>
-                <div className="text-sm font-semibold text-green-900">{fmt(calculationPreview.totalCH4TPerYear)} t CH₄/yr</div>
+                <div className="text-xs text-green-600 font-medium mb-1">年度 CH₄ 排放总量</div>
+                <div className="text-sm font-semibold text-green-900">{fmt(calculationPreview.totalCH4TPerYear)} t CH₄/年</div>
               </div>
             </div>
 
@@ -673,7 +684,7 @@ export default function ManureCH4Page() {
               <table className="min-w-full text-xs">
                 <thead>
                   <tr className="bg-green-100 text-left">
-                    {["畜种","阶段","占比合计（%）","状态","合计因子","t CH₄/yr"].map((h) => (
+                    {["畜种","阶段","占比合计（%）","状态","综合排放因子","CH₄ 排放量（t/年）"].map((h) => (
                       <th key={h} className="px-3 py-2.5 text-[11px] font-semibold text-green-700 uppercase tracking-wide whitespace-nowrap first:rounded-tl-xl last:rounded-tr-xl">{h}</th>
                     ))}
                   </tr>
@@ -690,7 +701,7 @@ export default function ManureCH4Page() {
                           : <span className="rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-xs font-medium text-amber-700">未到 100%</span>
                         }
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-gray-700">{fmt(group.emissionFactorKgPerHeadYear)} kg/head/yr</td>
+                      <td className="px-3 py-2.5 font-mono text-gray-700">{fmt(group.emissionFactorKgPerHeadYear)} kg/头·年</td>
                       <td className="px-3 py-2.5 font-mono font-semibold text-green-800">{fmt(group.totalCH4TPerYear)}</td>
                     </tr>
                   ))}
@@ -699,7 +710,7 @@ export default function ManureCH4Page() {
             </div>
 
             <div className="text-xs text-green-700 leading-6 space-y-1">
-              <p>动物/阶段始终跟随养殖活动页同步；DMI、体重、饲养方式等活动数据已贯通到本页，作为后续 VS 自动估算的准备数据。</p>
+              <p>动物类别和阶段始终跟随养殖活动页同步；干物质采食量（DMI）、体重、饲养方式等活动数据已贯通到本页，作为后续挥发性固体排泄量（VS）自动估算的准备数据。</p>
               {statusMessage && <p className="font-semibold text-green-900 mt-2 pt-2 border-t border-green-200">{statusMessage}</p>}
             </div>
           </section>
@@ -714,7 +725,7 @@ export default function ManureCH4Page() {
               <table className="min-w-full text-xs">
                 <thead>
                   <tr className="bg-green-50 text-left">
-                    {["畜种","阶段","方法","管理方式","占比","区域推荐因子","VS","B₀","MCF","合成因子","t CH₄/yr"].map((h) => (
+                    {["畜种","阶段","方法","管理方式","占比","区域化推荐因子","挥发性固体排泄量（VS）","最大产甲烷潜力（B₀）","甲烷转化系数（MCF）","综合排放因子","CH₄ 排放量（t/年）"].map((h) => (
                       <th key={h} className="px-3 py-2.5 text-[11px] font-semibold text-green-700 uppercase tracking-wide whitespace-nowrap first:rounded-tl-xl last:rounded-tr-xl">{h}</th>
                     ))}
                   </tr>
@@ -724,14 +735,14 @@ export default function ManureCH4Page() {
                     <tr key={`${row.species}-${row.stage}-${index}`} className="hover:bg-gray-50 transition">
                       <td className="px-3 py-2.5 text-gray-700">{row.species}</td>
                       <td className="px-3 py-2.5 text-gray-500">{row.stage}</td>
-                      <td className="px-3 py-2.5 text-gray-500">{row.method}</td>
+                      <td className="px-3 py-2.5 text-gray-500">{getManureCH4MethodLabel(row.method)}</td>
                       <td className="px-3 py-2.5 text-gray-500">{row.managementSystem || "-"}</td>
                       <td className="px-3 py-2.5 font-mono text-gray-700">{fmt(row.sharePercent, 2)}%</td>
                       <td className="px-3 py-2.5 font-mono text-gray-700">{fmt(row.regionalEmissionFactor)}</td>
                       <td className="px-3 py-2.5 font-mono text-gray-700">{fmt(row.vsKgPerHeadPerDay)}</td>
                       <td className="px-3 py-2.5 font-mono text-gray-700">{fmt(row.boM3PerKgVS)}</td>
                       <td className="px-3 py-2.5 font-mono text-gray-700">{fmt(row.mcfPercent, 2)}%</td>
-                      <td className="px-3 py-2.5 font-mono text-gray-700">{fmt(row.emissionFactorKgPerHeadYear)} kg/head/yr</td>
+                      <td className="px-3 py-2.5 font-mono text-gray-700">{fmt(row.emissionFactorKgPerHeadYear)} kg/头·年</td>
                       <td className="px-3 py-2.5 font-mono font-semibold text-green-800">{fmt(row.rowCH4TPerYear)}</td>
                     </tr>
                   ))}

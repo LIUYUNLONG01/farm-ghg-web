@@ -31,14 +31,8 @@ export const LIVESTOCK_STAGE_OPTIONS: Record<
   家禽: ["默认"],
 };
 
-export const PRODUCTION_PURPOSE_OPTIONS: readonly LivestockProductionPurpose[] = [
-  "泌乳",
-  "后备",
-  "育肥",
-  "繁殖",
-  "公牛",
-  "其它",
-];
+export const PRODUCTION_PURPOSE_OPTIONS: readonly LivestockProductionPurpose[] =
+  ["泌乳", "后备", "育肥", "繁殖", "公牛", "其它"];
 
 export const POPULATION_MODE_OPTIONS: readonly {
   value: LivestockPopulationMode;
@@ -52,11 +46,26 @@ export const DMI_METHOD_OPTIONS: readonly {
   value: DMIAcquisitionMethod;
   label: string;
 }[] = [
-  { value: "direct_input", label: "直接录入 DMI" },
-  { value: "feed_ledger", label: "后续由饲料台账反推" },
-  { value: "temporary_estimate", label: "暂用经验值/台账估计" },
-  { value: "model_nema_placeholder", label: "后续按 NEma 模型估算" },
-  { value: "model_de_placeholder", label: "后续按 DE% 模型估算" },
+  {
+    value: "direct_input",
+    label: "直接录入干物质采食量（DMI）",
+  },
+  {
+    value: "feed_ledger",
+    label: "后续由饲料台账反推干物质采食量（DMI）",
+  },
+  {
+    value: "temporary_estimate",
+    label: "暂用经验值或台账估计",
+  },
+  {
+    value: "model_nema_placeholder",
+    label: "后续按维持净能（NEma）模型估算",
+  },
+  {
+    value: "model_de_placeholder",
+    label: "后续按日粮可消化能占总能比例（DE）模型估算",
+  },
 ];
 
 export const FEEDING_SITUATION_OPTIONS: readonly FeedingSituation[] = [
@@ -70,7 +79,9 @@ function includesAny(target: string, keywords: string[]) {
   return keywords.some((keyword) => target.includes(keyword));
 }
 
-export function normalizeLivestockSpecies(input: string): LivestockSpeciesOption {
+export function normalizeLivestockSpecies(
+  input: string
+): LivestockSpeciesOption {
   const text = input.trim();
 
   if (includesAny(text, ["奶牛", "dairy"])) return "奶牛";
@@ -79,8 +90,9 @@ export function normalizeLivestockSpecies(input: string): LivestockSpeciesOption
   if (includesAny(text, ["绵羊", "sheep"])) return "绵羊";
   if (includesAny(text, ["山羊", "goat"])) return "山羊";
   if (includesAny(text, ["猪", "pig", "swine"])) return "猪";
-  if (includesAny(text, ["鸡", "禽", "poultry", "broiler", "layer"])) return "家禽";
-
+  if (includesAny(text, ["鸡", "禽", "poultry", "broiler", "layer"])) {
+    return "家禽";
+  }
   if (includesAny(text, ["牛"])) return "肉牛";
   if (includesAny(text, ["羊"])) return "绵羊";
 
@@ -107,11 +119,9 @@ export function normalizeLivestockStage(
   if (includesAny(text, ["繁殖", "泌乳", "母", "经产"])) {
     return "繁殖母畜";
   }
-
   if (includesAny(text, ["当年", "犊", "育成", "青年", "羔"])) {
     return "当年生";
   }
-
   if (includesAny(text, ["其他", "成年", "干奶"])) {
     return "其他成年畜";
   }

@@ -79,18 +79,48 @@ function mergeNote(existing: string | undefined, incoming: string) {
 
 function getLivestockDmiSourceLabel(row: LivestockRecord): string {
   switch (row.dmiMethod) {
-    case "direct_input": return "养殖活动页直接录入 DMI";
-    case "feed_ledger": return "养殖活动页按饲料台账反推 DMI";
-    case "temporary_estimate": return "养殖活动页暂用经验值/台账估计";
-    case "model_nema_placeholder": return "养殖活动页后续按 NEma 模型估算";
-    case "model_de_placeholder": return "养殖活动页后续按 DE% 模型估算";
-    default: return "养殖活动页未提供 DMI 来源";
+    case "direct_input": return "养殖活动页直接录入干物质采食量（DMI）";
+    case "feed_ledger": return "养殖活动页按饲料台账反推干物质采食量（DMI）";
+    case "temporary_estimate": return "养殖活动页暂用经验值或台账估计干物质采食量（DMI）";
+    case "model_nema_placeholder": return "养殖活动页后续按维持净能模型（NEma）估算干物质采食量（DMI）";
+    case "model_de_placeholder": return "养殖活动页后续按日粮可消化能占总能比例（DE）模型估算干物质采食量（DMI）";
+    default: return "养殖活动页未提供干物质采食量（DMI）来源";
   }
 }
 
 function getLivestockDmiValue(row: LivestockRecord): number | undefined {
   const dmi = safeNumber(row.dmiKgPerHeadDay);
   return dmi > 0 ? dmi : undefined;
+}
+
+function getActivityDataMethodLabel(
+  method: EntericRecord["activityDataMethod"] | EntericFormRowInput["activityDataMethod"] | string | undefined
+): string {
+  switch (method) {
+    case "annualAveragePopulation":
+      return "直接录入年平均存栏（AP）";
+    case "monthlyAveragePopulation":
+      return "录入 12 个月存栏并自动平均";
+    case "turnoverCalculation":
+      return "年度饲养量（NA）× 生长天数（DA）/ 365";
+    default:
+      return "未识别";
+  }
+}
+
+function getEntericMethodLabel(
+  method: EntericRecord["method"] | EntericFormRowInput["method"] | string | undefined
+): string {
+  switch (method) {
+    case "defaultEF":
+      return "推荐因子法";
+    case "calculatedEF":
+      return "公式计算法";
+    case "measuredEF":
+      return "实测或手工因子法";
+    default:
+      return "未识别";
+  }
 }
 
 function createRowFromLivestock(row: LivestockRecord, index: number, standardVersion: StandardVersion): EntericFormRowInput {
@@ -115,7 +145,7 @@ function createRowFromLivestock(row: LivestockRecord, index: number, standardVer
     parameterSourceType: defaultFactor?.parameterSourceType ?? "manual_input",
     parameterSourceLabel: defaultFactor?.parameterSourceLabel ?? "未匹配默认因子，需手动填写",
     notes: getLivestockDmiValue(row) !== undefined
-      ? mergeNote(defaultFactor?.notes, `DMI 已从养殖活动页同步：${getLivestockDmiSourceLabel(row)}`)
+      ? mergeNote(defaultFactor?.notes, `干物质采食量（DMI）已从养殖活动页同步：${getLivestockDmiSourceLabel(row)}`)
       : defaultFactor?.notes ?? "",
   };
 }
@@ -131,7 +161,7 @@ function syncEntericRowWithLivestock(livestockRow: LivestockRecord, index: numbe
     species: livestockRow.species,
     stage: livestockRow.stage,
     activityDataMethod: (existingRow.activityDataMethod as EntericFormRowInput["activityDataMethod"]) ?? (useTurnover ? "turnoverCalculation" : "annualAveragePopulation"),
-    // ★ 关键修复：年平均存栏 AP 始终从养殖活动页强制同步，不再被旧草稿覆盖
+    // ★ 关键修复：年平均存栏（AP）始终从养殖活动页强制同步，不再被旧草稿覆盖
     annualAveragePopulation: useTurnover ? undefined : livestockRow.annualAverageHead,
     janHead: existingRow.janHead, febHead: existingRow.febHead, marHead: existingRow.marHead,
     aprHead: existingRow.aprHead, mayHead: existingRow.mayHead, junHead: existingRow.junHead,
@@ -146,7 +176,7 @@ function syncEntericRowWithLivestock(livestockRow: LivestockRecord, index: numbe
     parameterSourceType: existingRow.parameterSourceType ?? baseRow.parameterSourceType,
     parameterSourceLabel: existingRow.parameterSourceLabel ?? baseRow.parameterSourceLabel,
     notes: livestockDmi !== undefined
-      ? mergeNote(existingRow.notes, `DMI 已按当前养殖活动口径同步：${getLivestockDmiSourceLabel(livestockRow)}`)
+      ? mergeNote(existingRow.notes, `干物质采食量（DMI）已按当前养殖活动口径同步：${getLivestockDmiSourceLabel(livestockRow)}`)
       : existingRow.notes ?? baseRow.notes,
   };
 
@@ -168,7 +198,7 @@ function syncEntericRowWithLivestock(livestockRow: LivestockRecord, index: numbe
         ...synced,
         ymPercent: ymMatched.ymPercent,
         parameterSourceLabel: `${standardVersion} ${ymMatched.sourceTable}：${ymMatched.label}`,
-        notes: mergeNote(synced.notes, `${ymMatched.sourceTable} ${ymMatched.label} 的 Ym 已按当前养殖活动口径重新同步。`),
+        notes: mergeNote(synced.notes, `${ymMatched.sourceTable} ${ymMatched.label} 的甲烷能量转化率（Ym）已按当前养殖活动口径重新同步。`),
       };
     }
   }
@@ -192,22 +222,23 @@ export default function EntericPage() {
 
   useEffect(() => {
     (async () => {
-    const draft = await loadProjectDraft();
-    if (!draft) return;
-    const livestock = draft.livestock ?? [];
-    const entericDraft = draft.enteric ?? [];
-    setProjectName(draft.base.enterpriseName || "未命名项目");
-    setStandardVersion(draft.base.standardVersion);
-    setLivestockRows(livestock);
-    const syncedRows = livestock.map((livestockRow, index) => {
-      const existingRow = entericDraft.find((item) => item.sourceLivestockIndex === index);
-      return syncEntericRowWithLivestock(livestockRow, index, draft.base.standardVersion, existingRow);
-    });
-    reset({ rows: syncedRows });
-    setStatusMessage(entericDraft.length > 0
-      ? "已加载肠道发酵草稿，并按当前养殖活动数据重新同步了畜种、阶段、年平均存栏 AP 和 DMI。"
-      : "已按标准版本初始化肠道发酵模块。"
-    );
+      const draft = await loadProjectDraft();
+      if (!draft) return;
+      const livestock = draft.livestock ?? [];
+      const entericDraft = draft.enteric ?? [];
+      setProjectName(draft.base.enterpriseName || "未命名项目");
+      setStandardVersion(draft.base.standardVersion);
+      setLivestockRows(livestock);
+      const syncedRows = livestock.map((livestockRow, index) => {
+        const existingRow = entericDraft.find((item) => item.sourceLivestockIndex === index);
+        return syncEntericRowWithLivestock(livestockRow, index, draft.base.standardVersion, existingRow);
+      });
+      reset({ rows: syncedRows });
+      setStatusMessage(
+        entericDraft.length > 0
+          ? "已加载肠道发酵草稿，并按当前养殖活动数据重新同步了畜种、阶段、年平均存栏（AP）和干物质采食量（DMI）。"
+          : "已按标准版本初始化肠道发酵模块。"
+      );
     })();
   }, [reset]);
 
@@ -219,12 +250,18 @@ export default function EntericPage() {
       stage: row.stage ?? "",
       activityDataMethod: row.activityDataMethod,
       annualAveragePopulation: toOptionalNumber(row.annualAveragePopulation),
-      janHead: toOptionalNumber(row.janHead), febHead: toOptionalNumber(row.febHead),
-      marHead: toOptionalNumber(row.marHead), aprHead: toOptionalNumber(row.aprHead),
-      mayHead: toOptionalNumber(row.mayHead), junHead: toOptionalNumber(row.junHead),
-      julHead: toOptionalNumber(row.julHead), augHead: toOptionalNumber(row.augHead),
-      sepHead: toOptionalNumber(row.sepHead), octHead: toOptionalNumber(row.octHead),
-      novHead: toOptionalNumber(row.novHead), decHead: toOptionalNumber(row.decHead),
+      janHead: toOptionalNumber(row.janHead),
+      febHead: toOptionalNumber(row.febHead),
+      marHead: toOptionalNumber(row.marHead),
+      aprHead: toOptionalNumber(row.aprHead),
+      mayHead: toOptionalNumber(row.mayHead),
+      junHead: toOptionalNumber(row.junHead),
+      julHead: toOptionalNumber(row.julHead),
+      augHead: toOptionalNumber(row.augHead),
+      sepHead: toOptionalNumber(row.sepHead),
+      octHead: toOptionalNumber(row.octHead),
+      novHead: toOptionalNumber(row.novHead),
+      decHead: toOptionalNumber(row.decHead),
       annualThroughput: toOptionalNumber(row.annualThroughput),
       daysAlive: toOptionalNumber(row.daysAlive),
       method: row.method,
@@ -239,34 +276,48 @@ export default function EntericPage() {
     }))
   );
 
-  // ── shared style tokens ──────────────────────────────────────────────────
-  const inputClass = "w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-green-400 focus:ring-2 focus:ring-green-100";
-  const readonlyClass = "w-full rounded-xl border border-green-100 bg-green-50 px-4 py-2.5 text-sm text-green-900 font-medium";
+  const inputClass =
+    "w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-green-400 focus:ring-2 focus:ring-green-100";
+  const readonlyClass =
+    "w-full rounded-xl border border-green-100 bg-green-50 px-4 py-2.5 text-sm text-green-900 font-medium";
   const errorClass = "mt-1.5 text-xs text-red-500";
 
-  // ── handlers ─────────────────────────────────────────────────────────────
   const syncDmiFromLivestock = (index: number) => {
     const livestockRow = livestockRows[index];
     if (!livestockRow) return;
     const livestockDmi = getLivestockDmiValue(livestockRow);
-    if (livestockDmi === undefined) { setStatusMessage(`第 ${index + 1} 行对应群体当前没有可同步的 DMI。`); return; }
+    if (livestockDmi === undefined) {
+      setStatusMessage(`第 ${index + 1} 行对应群体当前没有可同步的干物质采食量（DMI）。`);
+      return;
+    }
     setValue(`rows.${index}.dmiKgPerHeadDay`, livestockDmi, { shouldValidate: true });
-    setValue(`rows.${index}.notes`, mergeNote(watchedRows[index]?.notes, `DMI 已从养殖活动页重新同步：${getLivestockDmiSourceLabel(livestockRow)}`), { shouldValidate: true });
-    setStatusMessage(`第 ${index + 1} 行已从养殖活动页同步 DMI。`);
+    setValue(
+      `rows.${index}.notes`,
+      mergeNote(watchedRows[index]?.notes, `干物质采食量（DMI）已从养殖活动页重新同步：${getLivestockDmiSourceLabel(livestockRow)}`),
+      { shouldValidate: true }
+    );
+    setStatusMessage(`第 ${index + 1} 行已从养殖活动页同步干物质采食量（DMI）。`);
   };
 
   const applyDefaultFactorForRow = (index: number) => {
     const row = watchedRows[index];
     if (!row) return;
     const matched = getEntericDefaultFactor(standardVersion, row.species ?? "", row.stage ?? "");
-    if (!matched) { setStatusMessage(`第 ${index + 1} 行未匹配到推荐因子，请手动填写或改用计算法/实测法。`); return; }
+    if (!matched) {
+      setStatusMessage(`第 ${index + 1} 行未匹配到推荐因子，请手动填写或改用计算法/实测法。`);
+      return;
+    }
     setValue(`rows.${index}.method`, "defaultEF", { shouldValidate: true });
     setValue(`rows.${index}.emissionFactor`, matched.emissionFactor, { shouldValidate: true });
     setValue(`rows.${index}.ymPercent`, undefined, { shouldValidate: false });
     setValue(`rows.${index}.geMJPerHeadDay`, undefined, { shouldValidate: false });
     setValue(`rows.${index}.parameterSourceType`, "default_library", { shouldValidate: true });
-    setValue(`rows.${index}.parameterSourceLabel`, `${standardVersion} ${matched.sourceTable}：${matched.label}`, { shouldValidate: true });
-    setValue(`rows.${index}.notes`, mergeNote(watchedRows[index]?.notes, `${matched.sourceTable} ${matched.label} 已自动带入默认值。`), { shouldValidate: true });
+    setValue(`rows.${index}.parameterSourceLabel`, `${standardVersion} ${matched.sourceTable}：${matched.label}`, {
+      shouldValidate: true,
+    });
+    setValue(`rows.${index}.notes`, mergeNote(watchedRows[index]?.notes, `${matched.sourceTable} ${matched.label} 已自动带入默认值。`), {
+      shouldValidate: true,
+    });
     setStatusMessage(`第 ${index + 1} 行已带入推荐因子。`);
   };
 
@@ -289,7 +340,7 @@ export default function EntericPage() {
       };
     });
     reset({ rows: nextRows });
-    setStatusMessage("已按当前标准版本为全部可匹配记录带入推荐因子，并同步 DMI。");
+    setStatusMessage("已按当前标准版本为全部可匹配记录带入推荐因子，并同步干物质采食量（DMI）。");
   };
 
   const markRowManual = (index: number, label: string) => {
@@ -314,8 +365,12 @@ export default function EntericPage() {
       setValue(`rows.${index}.ymPercent`, undefined, { shouldValidate: false });
       setValue(`rows.${index}.geMJPerHeadDay`, undefined, { shouldValidate: false });
       setValue(`rows.${index}.parameterSourceType`, "default_library", { shouldValidate: true });
-      setValue(`rows.${index}.parameterSourceLabel`, `${standardVersion} ${matched.sourceTable}：${matched.label}`, { shouldValidate: true });
-      setValue(`rows.${index}.notes`, mergeNote(row.notes, `${matched.sourceTable} ${matched.label} 已自动带入默认值。`), { shouldValidate: true });
+      setValue(`rows.${index}.parameterSourceLabel`, `${standardVersion} ${matched.sourceTable}：${matched.label}`, {
+        shouldValidate: true,
+      });
+      setValue(`rows.${index}.notes`, mergeNote(row.notes, `${matched.sourceTable} ${matched.label} 已自动带入默认值。`), {
+        shouldValidate: true,
+      });
       setStatusMessage(`第 ${index + 1} 行已自动带入推荐因子。`);
       return;
     }
@@ -329,18 +384,28 @@ export default function EntericPage() {
       setValue(`rows.${index}.geMJPerHeadDay`, undefined, { shouldValidate: false });
       if (livestockDmi !== undefined) {
         setValue(`rows.${index}.dmiKgPerHeadDay`, livestockDmi, { shouldValidate: true });
-        setValue(`rows.${index}.notes`, mergeNote(row.notes, `DMI 已从养殖活动页同步：${getLivestockDmiSourceLabel(livestockRow!)}`), { shouldValidate: true });
+        setValue(
+          `rows.${index}.notes`,
+          mergeNote(row.notes, `干物质采食量（DMI）已从养殖活动页同步：${getLivestockDmiSourceLabel(livestockRow!)}`),
+          { shouldValidate: true }
+        );
       }
       if (ymMatched) {
         setValue(`rows.${index}.ymPercent`, ymMatched.ymPercent, { shouldValidate: true });
         setValue(`rows.${index}.parameterSourceType`, "default_library", { shouldValidate: true });
-        setValue(`rows.${index}.parameterSourceLabel`, `${standardVersion} ${ymMatched.sourceTable}：${ymMatched.label}`, { shouldValidate: true });
-        setValue(`rows.${index}.notes`, mergeNote(watchedRows[index]?.notes, `${ymMatched.sourceTable} ${ymMatched.label} 的 Ym 已自动带入默认值。`), { shouldValidate: true });
-        setStatusMessage(`第 ${index + 1} 行已自动带入 Ym 缺省值。`);
+        setValue(`rows.${index}.parameterSourceLabel`, `${standardVersion} ${ymMatched.sourceTable}：${ymMatched.label}`, {
+          shouldValidate: true,
+        });
+        setValue(
+          `rows.${index}.notes`,
+          mergeNote(watchedRows[index]?.notes, `${ymMatched.sourceTable} ${ymMatched.label} 的甲烷能量转化率（Ym）已自动带入默认值。`),
+          { shouldValidate: true }
+        );
+        setStatusMessage(`第 ${index + 1} 行已自动带入甲烷能量转化率（Ym）默认值。`);
       } else {
         setValue(`rows.${index}.ymPercent`, undefined, { shouldValidate: false });
-        markRowManual(index, "计算法：需手工输入 DMI / Ym");
-        setStatusMessage(`第 ${index + 1} 行切换到计算法，但未匹配到 Ym 缺省值，请手动填写 Ym。`);
+        markRowManual(index, "公式计算法：需手工输入干物质采食量（DMI）和甲烷能量转化率（Ym）");
+        setStatusMessage(`第 ${index + 1} 行切换到公式计算法，但未匹配到甲烷能量转化率（Ym）默认值，请手动填写甲烷能量转化率（Ym）。`);
       }
       return;
     }
@@ -348,8 +413,8 @@ export default function EntericPage() {
     if (value === "measuredEF") {
       setValue(`rows.${index}.ymPercent`, undefined, { shouldValidate: false });
       setValue(`rows.${index}.geMJPerHeadDay`, undefined, { shouldValidate: false });
-      markRowManual(index, "实测/手工输入排放因子");
-      setStatusMessage(`第 ${index + 1} 行已切换到实测/手工因子法。`);
+      markRowManual(index, "实测或手工输入排放因子");
+      setStatusMessage(`第 ${index + 1} 行已切换到实测或手工因子法。`);
     }
   };
 
@@ -362,10 +427,18 @@ export default function EntericPage() {
         stage: row.stage.trim(),
         activityDataMethod: row.activityDataMethod,
         annualAveragePopulation: row.annualAveragePopulation,
-        janHead: row.janHead, febHead: row.febHead, marHead: row.marHead,
-        aprHead: row.aprHead, mayHead: row.mayHead, junHead: row.junHead,
-        julHead: row.julHead, augHead: row.augHead, sepHead: row.sepHead,
-        octHead: row.octHead, novHead: row.novHead, decHead: row.decHead,
+        janHead: row.janHead,
+        febHead: row.febHead,
+        marHead: row.marHead,
+        aprHead: row.aprHead,
+        mayHead: row.mayHead,
+        junHead: row.junHead,
+        julHead: row.julHead,
+        augHead: row.augHead,
+        sepHead: row.sepHead,
+        octHead: row.octHead,
+        novHead: row.novHead,
+        decHead: row.decHead,
         annualThroughput: row.annualThroughput,
         daysAlive: row.daysAlive,
         method: row.method,
@@ -380,10 +453,9 @@ export default function EntericPage() {
       };
     });
     saveEntericDraft(rows);
-    setStatusMessage("已保存细化后的肠道发酵 CH4 草稿。");
+    setStatusMessage("已保存细化后的肠道发酵 CH₄ 草稿。");
   };
 
-  // autoSave hook 必须在所有条件 return 之前
   const autoSaveStatus = useAutoSave(
     watchedRows,
     async () => {
@@ -392,14 +464,15 @@ export default function EntericPage() {
     2000
   );
 
-  // ── empty state ──────────────────────────────────────────────────────────
   if (livestockRows.length === 0) {
     return (
       <main className="min-h-screen bg-gray-50 font-sans">
         <nav className="sticky top-0 z-50 backdrop-blur-md bg-gray-50/90 border-b border-green-100 px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm font-semibold text-green-700">
             <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
-              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 5.35-8 5.35V8z" /></svg>
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white">
+                <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 5.35-8 5.35V8z" />
+              </svg>
             </div>
             养殖场碳核算平台
           </div>
@@ -408,14 +481,20 @@ export default function EntericPage() {
           <div className="rounded-2xl border border-green-100 bg-white p-8 shadow-sm">
             <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center mb-4">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-6 h-6 text-amber-500">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
             </div>
             <h1 className="text-2xl font-bold text-gray-900">还没有养殖活动数据</h1>
             <p className="mt-3 text-sm text-gray-500 leading-7">先完成「基础信息」和「养殖活动数据」这两步，再进入肠道发酵模块。</p>
             <div className="mt-6 flex gap-3">
-              <Link href="/project/new" className="px-5 py-2.5 rounded-xl bg-green-700 text-white text-sm font-medium hover:bg-green-900 transition">回到基础信息</Link>
-              <Link href="/project/livestock" className="px-5 py-2.5 rounded-xl border border-green-100 text-green-800 text-sm font-medium hover:bg-green-50 transition">去录入养殖活动</Link>
+              <Link href="/project/new" className="px-5 py-2.5 rounded-xl bg-green-700 text-white text-sm font-medium hover:bg-green-900 transition">
+                回到基础信息
+              </Link>
+              <Link href="/project/livestock" className="px-5 py-2.5 rounded-xl border border-green-100 text-green-800 text-sm font-medium hover:bg-green-50 transition">
+                去录入养殖活动
+              </Link>
             </div>
           </div>
         </div>
@@ -423,32 +502,33 @@ export default function EntericPage() {
     );
   }
 
-  // ── main render ──────────────────────────────────────────────────────────
   return (
     <main className="min-h-screen bg-gray-50 font-sans text-gray-900">
-
-      {/* NAV */}
       <nav className="sticky top-0 z-50 backdrop-blur-md bg-gray-50/90 border-b border-green-100 px-6 h-14 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold text-green-700">
           <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
-            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 5.35-8 5.35V8z" /></svg>
+            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white">
+              <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 5.35-8 5.35V8z" />
+            </svg>
           </div>
           养殖场碳核算平台
         </div>
         <div className="flex items-center gap-2">
           <AutoSaveIndicator status={autoSaveStatus} />
-          <Link href="/project/livestock" className="text-xs px-3 py-1.5 rounded-lg border border-green-100 text-green-700 hover:bg-green-50 transition">返回养殖活动</Link>
-          <Link href="/" className="text-xs px-3 py-1.5 rounded-lg border border-green-100 text-green-700 hover:bg-green-50 transition">返回首页</Link>
+          <Link href="/project/livestock" className="text-xs px-3 py-1.5 rounded-lg border border-green-100 text-green-700 hover:bg-green-50 transition">
+            返回养殖活动
+          </Link>
+          <Link href="/" className="text-xs px-3 py-1.5 rounded-lg border border-green-100 text-green-700 hover:bg-green-50 transition">
+            返回首页
+          </Link>
         </div>
       </nav>
 
       <div className="mx-auto max-w-7xl px-6 py-12">
-
-        {/* PAGE HEADER */}
         <div className="mb-8">
           <div className="flex items-center gap-2 text-[11px] font-semibold text-green-500 tracking-[0.1em] uppercase mb-2">
             <span className="inline-block w-4 h-0.5 bg-green-400 rounded" />
-            Enteric CH₄
+            肠道发酵 CH₄
           </div>
           <h1 className="font-serif text-3xl font-bold tracking-tight text-gray-900">动物肠道发酵 CH₄</h1>
           <p className="mt-2 text-sm text-gray-400">
@@ -457,17 +537,15 @@ export default function EntericPage() {
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
-
-          {/* SECTION 1: AP & EF */}
           <section className="rounded-2xl border border-green-100 bg-white shadow-sm">
             <div className="flex items-center justify-between p-6 border-b border-green-50">
               <div>
                 <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
-                  活动数据 AP 与因子 EF 录入
+                  活动数据与排放因子录入
                 </h2>
                 <p className="mt-1 text-xs text-gray-400 leading-6 max-w-2xl">
-                  畜种、阶段、年平均存栏 AP 和 DMI 始终从「养殖活动数据」同步。每次进入本页都会强制读取最新值。
+                  畜种、阶段、年平均存栏（AP）和干物质采食量（DMI）始终从「养殖活动数据」同步。每次进入本页都会强制读取最新值。
                 </p>
               </div>
               <button
@@ -489,15 +567,18 @@ export default function EntericPage() {
 
                 return (
                   <div key={index} className="p-6">
-                    {/* record header */}
                     <div className="flex items-start justify-between mb-5">
                       <div>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="w-7 h-7 rounded-full border-2 border-green-200 text-green-700 text-xs font-bold flex items-center justify-center">{index + 1}</span>
-                          <h3 className="text-sm font-semibold text-gray-800">{row.species} / {row.stage}</h3>
+                          <span className="w-7 h-7 rounded-full border-2 border-green-200 text-green-700 text-xs font-bold flex items-center justify-center">
+                            {index + 1}
+                          </span>
+                          <h3 className="text-sm font-semibold text-gray-800">
+                            {row.species} / {row.stage}
+                          </h3>
                         </div>
                         <p className="text-xs text-gray-400 pl-9">
-                          计算后 AP：{fmt(rowPreview?.activityPopulation)} 头（只）· EF：{fmt(rowPreview?.emissionFactor)} kg CH₄/头·年
+                          计算后年平均存栏（AP）：{fmt(rowPreview?.activityPopulation)} 头（只）· 排放因子（EF）：{fmt(rowPreview?.emissionFactor)} kg CH₄/头·年
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-2 flex-shrink-0">
@@ -513,12 +594,10 @@ export default function EntericPage() {
                       </div>
                     </div>
 
-                    {/* hidden fields */}
                     <input type="hidden" {...register(`rows.${index}.sourceLivestockIndex`, { valueAsNumber: true })} />
                     <input type="hidden" {...register(`rows.${index}.parameterSourceType`)} />
                     <input type="hidden" {...register(`rows.${index}.parameterSourceLabel`)} />
 
-                    {/* basic fields */}
                     <div className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                       <label className="block">
                         <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">畜种</span>
@@ -530,26 +609,39 @@ export default function EntericPage() {
                       </label>
                       <label className="block xl:col-span-2">
                         <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">活动数据收集方式</span>
-                        <select {...register(`rows.${index}.activityDataMethod`, { onChange: () => markRowManual(index, "手工修改活动数据收集方式") })} className={inputClass}>
-                          <option value="annualAveragePopulation">直接录入年平均存栏 AP</option>
-                          <option value="monthlyAveragePopulation">录入 12 个月存栏自动平均</option>
-                          <option value="turnoverCalculation">短生长期动物：NA × DA / 365</option>
+                        <select
+                          {...register(`rows.${index}.activityDataMethod`, {
+                            onChange: () => markRowManual(index, "手工修改活动数据收集方式"),
+                          })}
+                          className={inputClass}
+                        >
+                          <option value="annualAveragePopulation">直接录入年平均存栏（AP）</option>
+                          <option value="monthlyAveragePopulation">录入 12 个月存栏并自动平均</option>
+                          <option value="turnoverCalculation">短生长期动物：年度饲养量（NA）× 生长天数（DA）/ 365</option>
                         </select>
                       </label>
                     </div>
 
-                    {/* conditional: annual avg */}
                     {row.activityDataMethod === "annualAveragePopulation" && (
                       <div className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                         <label className="block">
-                          <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">年平均存栏 AP（头/只）</span>
-                          <input type="number" step="any" {...register(`rows.${index}.annualAveragePopulation`, { valueAsNumber: true, onChange: () => markRowManual(index, "手工录入年平均存栏 AP") })} className={inputClass} />
-                          {errors.rows?.[index]?.annualAveragePopulation?.message && <p className={errorClass}>{String(errors.rows[index]?.annualAveragePopulation?.message)}</p>}
+                          <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">年平均存栏（AP）（头/只）</span>
+                          <input
+                            type="number"
+                            step="any"
+                            {...register(`rows.${index}.annualAveragePopulation`, {
+                              valueAsNumber: true,
+                              onChange: () => markRowManual(index, "手工录入年平均存栏（AP）"),
+                            })}
+                            className={inputClass}
+                          />
+                          {errors.rows?.[index]?.annualAveragePopulation?.message && (
+                            <p className={errorClass}>{String(errors.rows[index]?.annualAveragePopulation?.message)}</p>
+                          )}
                         </label>
                       </div>
                     )}
 
-                    {/* conditional: monthly */}
                     {row.activityDataMethod === "monthlyAveragePopulation" && (
                       <div className="mb-5">
                         <p className="mb-3 text-xs font-medium text-gray-500 uppercase tracking-wide">12 个月存栏数据</p>
@@ -557,94 +649,169 @@ export default function EntericPage() {
                           {monthFields.map((month) => (
                             <label key={month.key} className="block">
                               <span className="mb-1.5 block text-xs font-medium text-gray-500">{month.label}</span>
-                              <input type="number" step="any" {...register(`rows.${index}.${month.key}` as const, { valueAsNumber: true, onChange: () => markRowManual(index, "手工录入 12 个月存栏") })} className={inputClass} />
-                              {errors.rows?.[index]?.[month.key]?.message && <p className={errorClass}>{String(errors.rows[index]?.[month.key]?.message)}</p>}
+                              <input
+                                type="number"
+                                step="any"
+                                {...register(`rows.${index}.${month.key}` as const, {
+                                  valueAsNumber: true,
+                                  onChange: () => markRowManual(index, "手工录入 12 个月存栏"),
+                                })}
+                                className={inputClass}
+                              />
+                              {errors.rows?.[index]?.[month.key]?.message && (
+                                <p className={errorClass}>{String(errors.rows[index]?.[month.key]?.message)}</p>
+                              )}
                             </label>
                           ))}
                         </div>
                       </div>
                     )}
 
-                    {/* conditional: turnover */}
                     {row.activityDataMethod === "turnoverCalculation" && (
                       <div className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                         <label className="block">
-                          <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">年度饲养量 NA（头/只）</span>
-                          <input type="number" step="any" {...register(`rows.${index}.annualThroughput`, { valueAsNumber: true, onChange: () => markRowManual(index, "手工录入 NA 与 DA 折算 AP") })} className={inputClass} />
-                          {errors.rows?.[index]?.annualThroughput?.message && <p className={errorClass}>{String(errors.rows[index]?.annualThroughput?.message)}</p>}
+                          <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">年度饲养量（NA）（头/只）</span>
+                          <input
+                            type="number"
+                            step="any"
+                            {...register(`rows.${index}.annualThroughput`, {
+                              valueAsNumber: true,
+                              onChange: () => markRowManual(index, "手工录入年度饲养量（NA）与生长天数（DA）折算年平均存栏（AP）"),
+                            })}
+                            className={inputClass}
+                          />
+                          {errors.rows?.[index]?.annualThroughput?.message && (
+                            <p className={errorClass}>{String(errors.rows[index]?.annualThroughput?.message)}</p>
+                          )}
                         </label>
                         <label className="block">
-                          <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">生长天数 DA（天）</span>
-                          <input type="number" step="any" {...register(`rows.${index}.daysAlive`, { valueAsNumber: true, onChange: () => markRowManual(index, "手工录入 NA 与 DA 折算 AP") })} className={inputClass} />
-                          {errors.rows?.[index]?.daysAlive?.message && <p className={errorClass}>{String(errors.rows[index]?.daysAlive?.message)}</p>}
+                          <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">生长天数（DA）（天）</span>
+                          <input
+                            type="number"
+                            step="any"
+                            {...register(`rows.${index}.daysAlive`, {
+                              valueAsNumber: true,
+                              onChange: () => markRowManual(index, "手工录入年度饲养量（NA）与生长天数（DA）折算年平均存栏（AP）"),
+                            })}
+                            className={inputClass}
+                          />
+                          {errors.rows?.[index]?.daysAlive?.message && (
+                            <p className={errorClass}>{String(errors.rows[index]?.daysAlive?.message)}</p>
+                          )}
                         </label>
                       </div>
                     )}
 
-                    {/* EF method selector */}
                     <div className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                       <label className="block xl:col-span-2">
                         <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">排放因子获取方式</span>
-                        <select value={row.method ?? "defaultEF"} onChange={(e) => handleMethodChange(index, e.target.value as "defaultEF" | "calculatedEF" | "measuredEF")} className={inputClass}>
+                        <select
+                          value={row.method ?? "defaultEF"}
+                          onChange={(e) => handleMethodChange(index, e.target.value as "defaultEF" | "calculatedEF" | "measuredEF")}
+                          className={inputClass}
+                        >
                           <option value="defaultEF">推荐因子法</option>
-                          <option value="calculatedEF">计算法（DMI + Ym）</option>
-                          <option value="measuredEF">实测/手工因子法</option>
+                          <option value="calculatedEF">公式计算法〔干物质采食量（DMI）+ 甲烷能量转化率（Ym）〕</option>
+                          <option value="measuredEF">实测或手工因子法</option>
                         </select>
                       </label>
                     </div>
 
-                    {/* conditional: defaultEF / measuredEF */}
                     {(row.method === "defaultEF" || row.method === "measuredEF") && (
                       <div className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                         <label className="block">
-                          <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">排放因子 EF（kg CH₄/头·年）</span>
-                          <input type="number" step="any" {...register(`rows.${index}.emissionFactor`, { valueAsNumber: true, onChange: () => markRowManual(index, row.method === "defaultEF" ? "手工覆盖推荐因子" : "手工/实测录入排放因子") })} className={inputClass} />
-                          {errors.rows?.[index]?.emissionFactor?.message && <p className={errorClass}>{String(errors.rows[index]?.emissionFactor?.message)}</p>}
+                          <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">排放因子（EF）（kg CH₄/头·年）</span>
+                          <input
+                            type="number"
+                            step="any"
+                            {...register(`rows.${index}.emissionFactor`, {
+                              valueAsNumber: true,
+                              onChange: () =>
+                                markRowManual(index, row.method === "defaultEF" ? "手工覆盖推荐因子" : "手工或实测录入排放因子"),
+                            })}
+                            className={inputClass}
+                          />
+                          {errors.rows?.[index]?.emissionFactor?.message && (
+                            <p className={errorClass}>{String(errors.rows[index]?.emissionFactor?.message)}</p>
+                          )}
                         </label>
                       </div>
                     )}
 
-                    {/* conditional: calculatedEF */}
                     {row.method === "calculatedEF" && (
                       <>
                         <div className="mb-4 rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-xs text-green-800 leading-6">
-                          <p>当前养殖活动页 DMI 来源：{livestockRow ? getLivestockDmiSourceLabel(livestockRow) : "无"}</p>
-                          <p className="mt-0.5">当前可同步 DMI：{livestockDmi !== undefined ? `${fmt(livestockDmi, 4)} kg DM/头·日` : "未提供"}</p>
+                          <p>当前养殖活动页的干物质采食量（DMI）来源：{livestockRow ? getLivestockDmiSourceLabel(livestockRow) : "无"}</p>
+                          <p className="mt-0.5">
+                            当前可同步的干物质采食量（DMI）：{livestockDmi !== undefined ? `${fmt(livestockDmi, 4)} kg 干物质/头·日` : "未提供"}
+                          </p>
                           <div className="mt-2">
-                            <button type="button" onClick={() => syncDmiFromLivestock(index)} className="text-xs px-3 py-1.5 rounded-lg border border-green-300 bg-white text-green-700 hover:bg-green-100 transition font-medium">
-                              从养殖活动页同步 DMI
+                            <button
+                              type="button"
+                              onClick={() => syncDmiFromLivestock(index)}
+                              className="text-xs px-3 py-1.5 rounded-lg border border-green-300 bg-white text-green-700 hover:bg-green-100 transition font-medium"
+                            >
+                              从养殖活动页同步干物质采食量（DMI）
                             </button>
                           </div>
                         </div>
 
                         <div className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                           <label className="block">
-                            <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">DMI（kg/头·天）</span>
-                            <input type="number" step="any" {...register(`rows.${index}.dmiKgPerHeadDay`, { valueAsNumber: true, onChange: () => markRowManual(index, "按公式计算 EF，手工修改 DMI") })} className={inputClass} />
-                            {errors.rows?.[index]?.dmiKgPerHeadDay?.message && <p className={errorClass}>{String(errors.rows[index]?.dmiKgPerHeadDay?.message)}</p>}
+                            <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">干物质采食量（DMI）（kg/头·天）</span>
+                            <input
+                              type="number"
+                              step="any"
+                              {...register(`rows.${index}.dmiKgPerHeadDay`, {
+                                valueAsNumber: true,
+                                onChange: () => markRowManual(index, "按公式计算排放因子（EF）时，手工修改干物质采食量（DMI）"),
+                              })}
+                              className={inputClass}
+                            />
+                            {errors.rows?.[index]?.dmiKgPerHeadDay?.message && (
+                              <p className={errorClass}>{String(errors.rows[index]?.dmiKgPerHeadDay?.message)}</p>
+                            )}
                           </label>
                           <label className="block">
-                            <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">Ym（%）</span>
-                            <input type="number" step="any" {...register(`rows.${index}.ymPercent`, { valueAsNumber: true, onChange: () => markRowManual(index, "按公式计算 EF，手工修改 Ym") })} className={inputClass} />
-                            {errors.rows?.[index]?.ymPercent?.message && <p className={errorClass}>{String(errors.rows[index]?.ymPercent?.message)}</p>}
+                            <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">甲烷能量转化率（Ym）（%）</span>
+                            <input
+                              type="number"
+                              step="any"
+                              {...register(`rows.${index}.ymPercent`, {
+                                valueAsNumber: true,
+                                onChange: () => markRowManual(index, "按公式计算排放因子（EF）时，手工修改甲烷能量转化率（Ym）"),
+                              })}
+                              className={inputClass}
+                            />
+                            {errors.rows?.[index]?.ymPercent?.message && (
+                              <p className={errorClass}>{String(errors.rows[index]?.ymPercent?.message)}</p>
+                            )}
                           </label>
                           <label className="block">
-                            <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">自动计算 GE（MJ/头·天）</span>
+                            <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">自动计算总能摄入量（GE）（MJ/头·天）</span>
                             <div className={readonlyClass}>{fmt(rowPreview?.geMJPerHeadDay)}</div>
                           </label>
                           <label className="block">
-                            <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">自动计算 EF（kg CH₄/头·年）</span>
+                            <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">自动计算排放因子（EF）（kg CH₄/头·年）</span>
                             <div className={readonlyClass}>{fmt(rowPreview?.emissionFactor)}</div>
                           </label>
                         </div>
                       </>
                     )}
 
-                    {/* notes */}
                     <label className="block">
                       <span className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">备注</span>
-                      <textarea {...register(`rows.${index}.notes`, { onChange: () => markRowManual(index, "手工补充说明") })} rows={2} className={inputClass} placeholder="可填写活动数据来源、因子来源、测定说明等" />
-                      {errors.rows?.[index]?.notes?.message && <p className={errorClass}>{String(errors.rows[index]?.notes?.message)}</p>}
+                      <textarea
+                        {...register(`rows.${index}.notes`, {
+                          onChange: () => markRowManual(index, "手工补充说明"),
+                        })}
+                        rows={2}
+                        className={inputClass}
+                        placeholder="可填写活动数据来源、因子来源、测定说明等"
+                      />
+                      {errors.rows?.[index]?.notes?.message && (
+                        <p className={errorClass}>{String(errors.rows[index]?.notes?.message)}</p>
+                      )}
                     </label>
                   </div>
                 );
@@ -654,7 +821,6 @@ export default function EntericPage() {
             {errors.rows?.message && <p className="px-6 pb-4 text-xs text-red-500">{String(errors.rows.message)}</p>}
           </section>
 
-          {/* SECTION 2: summary */}
           <section className="rounded-2xl border border-dashed border-green-200 bg-green-50/50 p-6">
             <h2 className="text-sm font-semibold text-green-800 mb-4 flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
@@ -662,16 +828,15 @@ export default function EntericPage() {
             </h2>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 mb-4">
               <div className="rounded-xl border border-green-200 bg-white px-4 py-3 text-sm font-semibold text-green-900">
-                总 CH₄：{fmt(calculationPreview.totalCH4TPerYear)} t/yr
+                总 CH₄：{fmt(calculationPreview.totalCH4TPerYear)} t/年
               </div>
             </div>
             <div className="space-y-1 text-xs text-green-700 leading-6">
-              <p>这里的动物/阶段、年平均存栏 AP 始终跟随养殖活动页同步；当养殖活动页已形成 DMI 时，这里会优先读取该值。</p>
+              <p>这里的动物类别、阶段和年平均存栏（AP）始终跟随养殖活动页同步；当养殖活动页已形成干物质采食量（DMI）时，这里会优先读取该值。</p>
               {statusMessage && <p className="font-semibold text-green-900 mt-2 pt-2 border-t border-green-200">{statusMessage}</p>}
             </div>
           </section>
 
-          {/* SECTION 3: detail table */}
           <section className="rounded-2xl border border-green-100 bg-white p-6 shadow-sm">
             <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">3</span>
@@ -681,8 +846,13 @@ export default function EntericPage() {
               <table className="min-w-full text-xs">
                 <thead>
                   <tr className="bg-green-50 text-left">
-                    {["畜种","阶段","AP方法","EF方法","AP","DMI","Ym","GE","EF","t CH₄/yr"].map((h) => (
-                      <th key={h} className="px-3 py-2.5 text-[11px] font-semibold text-green-700 uppercase tracking-wide whitespace-nowrap first:rounded-tl-xl last:rounded-tr-xl">{h}</th>
+                    {["畜种", "阶段", "活动数据口径", "排放因子口径", "年平均存栏（AP）", "干物质采食量（DMI）", "甲烷能量转化率（Ym）", "总能摄入量（GE）", "排放因子（EF）", "CH₄ 排放量（t/年）"].map((h) => (
+                      <th
+                        key={h}
+                        className="px-3 py-2.5 text-[11px] font-semibold text-green-700 uppercase tracking-wide whitespace-nowrap first:rounded-tl-xl last:rounded-tr-xl"
+                      >
+                        {h}
+                      </th>
                     ))}
                   </tr>
                 </thead>
@@ -691,8 +861,8 @@ export default function EntericPage() {
                     <tr key={`${previewRow.species}-${previewRow.stage}-${index}`} className="hover:bg-gray-50 transition">
                       <td className="px-3 py-2.5 text-gray-700">{previewRow.species}</td>
                       <td className="px-3 py-2.5 text-gray-500">{previewRow.stage}</td>
-                      <td className="px-3 py-2.5 text-gray-500">{previewRow.activityDataMethod}</td>
-                      <td className="px-3 py-2.5 text-gray-500">{previewRow.method}</td>
+                      <td className="px-3 py-2.5 text-gray-500">{getActivityDataMethodLabel(previewRow.activityDataMethod)}</td>
+                      <td className="px-3 py-2.5 text-gray-500">{getEntericMethodLabel(previewRow.method)}</td>
                       <td className="px-3 py-2.5 font-mono text-gray-700">{fmt(previewRow.activityPopulation)}</td>
                       <td className="px-3 py-2.5 font-mono text-gray-700">{fmt(previewRow.dmiKgPerHeadDay, 4)}</td>
                       <td className="px-3 py-2.5 font-mono text-gray-700">{fmt(previewRow.ymPercent)}</td>
@@ -706,13 +876,20 @@ export default function EntericPage() {
             </div>
           </section>
 
-          {/* ACTIONS */}
           <div className="flex flex-wrap gap-3">
-            <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 rounded-xl bg-green-700 text-white text-sm font-medium shadow-sm hover:bg-green-900 disabled:opacity-50 disabled:cursor-not-allowed transition">
-              {isSubmitting ? "保存中..." : "保存细化后的肠道发酵草稿"}
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-6 py-2.5 rounded-xl bg-green-700 text-white text-sm font-medium shadow-sm hover:bg-green-900 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              {isSubmitting ? "保存中..." : "保存细化后的肠道发酵 CH₄ 草稿"}
             </button>
-            <Link href="/project/livestock" className="px-5 py-2.5 rounded-xl border border-green-100 bg-white text-sm font-medium text-green-800 shadow-sm hover:bg-green-50 transition">返回上一页</Link>
-            <Link href="/project/manure-ch4" className="px-5 py-2.5 rounded-xl border border-green-200 bg-white text-sm font-medium text-green-700 shadow-sm hover:bg-green-50 transition">下一步：粪污管理 CH₄ →</Link>
+            <Link href="/project/livestock" className="px-5 py-2.5 rounded-xl border border-green-100 bg-white text-sm font-medium text-green-800 shadow-sm hover:bg-green-50 transition">
+              返回上一页
+            </Link>
+            <Link href="/project/manure-ch4" className="px-5 py-2.5 rounded-xl border border-green-200 bg-white text-sm font-medium text-green-700 shadow-sm hover:bg-green-50 transition">
+              下一步：粪污管理 CH₄ →
+            </Link>
           </div>
         </form>
       </div>

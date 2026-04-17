@@ -148,7 +148,7 @@ export default function EnergyPage() {
         <div className="mb-8">
           <div className="flex items-center gap-2 text-[11px] font-semibold text-green-500 tracking-[0.1em] uppercase mb-2">
             <span className="inline-block w-4 h-0.5 bg-green-400 rounded" />
-            Energy Module
+            能源模块
           </div>
           <h1 className="font-serif text-3xl font-bold tracking-tight text-gray-900">能源与购入/输出电力热力</h1>
           <p className="mt-2 text-sm text-gray-400">当前项目：{projectName} · 标准版本：{standardVersion}</p>
@@ -165,7 +165,7 @@ export default function EnergyPage() {
                   化石燃料燃烧
                 </h2>
                 <p className="mt-1 text-xs text-gray-400 leading-6 max-w-2xl">
-                  已接入「常见燃料模板」。低位发热量按常见写法带入，计算时自动兼容 GJ/单位 和 TJ/单位 两种输入。
+                  已接入“常见燃料模板”。低位发热量按常见写法带入，计算时自动兼容 GJ/单位 和 TJ/单位 两种输入。
                 </p>
               </div>
               <button type="button" onClick={addEmptyFuelRow}
@@ -233,7 +233,7 @@ export default function EnergyPage() {
 
                     <div className="grid gap-3 md:grid-cols-2">
                       <div className={readonlyClass}>排放因子预览：{fmt(previewRow?.emissionFactorTCO2PerUnit, 6)} tCO₂/单位</div>
-                      <div className={readonlyClass}>年度排放预览：{fmt(previewRow?.rowCO2TPerYear, 3)} tCO₂/yr</div>
+                      <div className={readonlyClass}>年度排放预览：{fmt(previewRow?.rowCO2TPerYear, 3)} tCO₂/年</div>
                     </div>
                   </div>
                 );
@@ -292,9 +292,9 @@ export default function EnergyPage() {
             {/* hero total */}
             <div className="rounded-xl bg-green-700 px-5 py-4 mb-4 flex items-center justify-between">
               <div>
-                <div className="text-xs font-medium text-green-200 uppercase tracking-widest mb-1">能源模块总排放</div>
+                <div className="text-xs font-medium text-green-200 uppercase tracking-widest mb-1">能源模块排放总量</div>
                 <div className="text-3xl font-bold text-white">{fmt(energyModuleTotal)}</div>
-                <div className="text-xs text-green-200 mt-0.5">tCO₂ / 年</div>
+                <div className="text-xs text-green-200 mt-0.5">tCO₂/年</div>
               </div>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-10 h-10 text-green-400 opacity-60">
                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
@@ -303,10 +303,10 @@ export default function EnergyPage() {
 
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 mb-4">
               {[
-                { label: "化石燃料燃烧", val: `${fmt(fossilFuelPreview.totalCO2TPerYear)} tCO₂/yr` },
-                { label: "购入电力热力", val: `${fmt(energyBalancePreview.totalPurchasedTCO2)} tCO₂/yr` },
-                { label: "输出电力热力", val: `${fmt(energyBalancePreview.totalExportedTCO2)} tCO₂/yr` },
-                { label: "净购入电力热力", val: `${fmt(energyBalancePreview.netPurchasedTCO2)} tCO₂/yr` },
+                { label: "化石燃料燃烧", val: `${fmt(fossilFuelPreview.totalCO2TPerYear)} tCO₂/年` },
+                { label: "购入电力热力", val: `${fmt(energyBalancePreview.totalPurchasedTCO2)} tCO₂/年` },
+                { label: "输出电力热力", val: `${fmt(energyBalancePreview.totalExportedTCO2)} tCO₂/年` },
+                { label: "净购入电力热力", val: `${fmt(energyBalancePreview.netPurchasedTCO2)} tCO₂/年` },
               ].map((s) => (
                 <div key={s.label} className="rounded-xl border border-green-200 bg-white px-4 py-3">
                   <div className="text-xs text-green-600 font-medium mb-1">{s.label}</div>
@@ -331,7 +331,7 @@ export default function EnergyPage() {
               <table className="min-w-full text-xs">
                 <thead>
                   <tr className="bg-green-50 text-left">
-                    {["燃料","消耗量","NCV输入值","NCV（TJ/单位）","含碳量","氧化率","因子","tCO₂/yr"].map((h) => (
+                    {["燃料","消耗量","低位发热量输入值（NCV）","低位发热量（NCV）（TJ/单位）","单位热值含碳量","氧化率","排放因子","CO₂ 排放量（t/年）"].map((h) => (
                       <th key={h} className="px-3 py-2.5 text-[11px] font-semibold text-green-700 uppercase tracking-wide whitespace-nowrap first:rounded-tl-xl last:rounded-tr-xl">{h}</th>
                     ))}
                   </tr>
