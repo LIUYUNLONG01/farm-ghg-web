@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import FieldHelpAutoMount from "@/components/FieldHelpAutoMount";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,6 +30,8 @@ export default function RootLayout({
     >
       <body className="min-h-screen flex flex-col">
         <div className="flex-1">{children}</div>
+
+        <FieldHelpAutoMount />
 
         <footer className="bg-gray-900 border-t border-green-900/40 px-6 py-6">
           <div className="mx-auto max-w-6xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs text-gray-400">
