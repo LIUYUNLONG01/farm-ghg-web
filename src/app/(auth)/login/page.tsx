@@ -3,45 +3,54 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 
-/* ── 功能标签 ── */
-const features = ["肠道发酵 CH₄", "粪污管理 N₂O", "能源消耗", "电力热力"];
+const features = [
+  "养殖活动数据管理",
+  "肠道发酵 CH₄ 核算",
+  "粪污管理 CH₄/N₂O 核算",
+  "能源与电力热力核算",
+];
 
 function FeaturePill({ text }: { text: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-medium text-white/95 bg-white/[0.15] border border-white/20 backdrop-blur-md hover:bg-white/[0.25] hover:scale-105 transition-all">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-3.5 h-3.5 opacity-90">
-        <path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="10" />
-      </svg>
+    <span className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur-sm">
       {text}
     </span>
   );
 }
 
-/* ── 输入框图标 ── */
-function MailIcon() {
+function BrandMark() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]">
-      <rect x="2" y="4" width="20" height="16" rx="3" />
-      <polyline points="22,4 12,13 2,4" />
+    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm">
+      <svg viewBox="0 0 24 24" className="h-6 w-6 fill-white">
+        <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 5.35-8 5.35V8z" />
+      </svg>
+    </div>
+  );
+}
+
+function UserIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4.5 w-4.5">
+      <path d="M20 21a8 8 0 0 0-16 0" />
+      <circle cx="12" cy="8" r="4" />
     </svg>
   );
 }
 
 function LockIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]">
-      <rect x="3" y="11" width="18" height="11" rx="3" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4.5 w-4.5">
+      <rect x="4" y="11" width="16" height="9" rx="2" />
+      <path d="M8 11V8a4 4 0 1 1 8 0v3" />
     </svg>
   );
 }
 
 function EyeIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4.5 w-4.5">
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
       <circle cx="12" cy="12" r="3" />
     </svg>
   );
@@ -49,36 +58,47 @@ function EyeIcon() {
 
 function EyeOffIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]">
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-      <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
-      <line x1="1" y1="1" x2="23" y2="23" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4.5 w-4.5">
+      <path d="M3 3l18 18" />
+      <path d="M10.58 10.58a2 2 0 0 0 2.84 2.84" />
+      <path d="M9.36 5.37A10.94 10.94 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.06 3.67" />
+      <path d="M6.23 6.23A17.47 17.47 0 0 0 2 12s3.5 7 10 7a10.7 10.7 0 0 0 5.2-1.27" />
     </svg>
   );
 }
 
-/* ══════════════════════════════════════════
-   登录页主组件
-   ══════════════════════════════════════════ */
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showPw, setShowPw] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    const normalizedUsername = username.trim();
+
+    if (!normalizedUsername || !password) {
+      setError("用户名和密码不能为空");
+      return;
+    }
+
     setLoading(true);
 
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: normalizedUsername,
+          password,
+        }),
       });
 
       const data = await res.json();
@@ -98,215 +118,171 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex">
-      {/* ══ 左侧品牌面板 ══ */}
-      <div className="hidden lg:flex flex-1 flex-col items-center justify-center relative overflow-hidden">
-        {/* 多层渐变背景 */}
-        <div className="absolute inset-0 bg-gradient-to-br from-green-900 via-green-800 to-emerald-700" />
-        <div className="absolute inset-0 bg-gradient-to-t from-green-950/50 via-transparent to-transparent" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_30%,rgba(74,222,128,0.2)_0%,transparent_60%)]" />
+    <main className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="grid min-h-screen lg:grid-cols-[1.08fr_0.92fr]">
+        <section className="relative hidden overflow-hidden bg-gradient-to-br from-emerald-900 via-green-800 to-teal-700 lg:block">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.12),transparent_24%)]" />
+          <div className="absolute -left-20 top-16 h-56 w-56 rounded-full border border-white/10" />
+          <div className="absolute bottom-10 right-10 h-72 w-72 rounded-full border border-white/10" />
 
-        {/* 装饰光斑 */}
-        <div className="absolute -top-40 -right-32 w-[500px] h-[500px] rounded-full bg-emerald-400/15 blur-3xl animate-pulse" />
-        <div className="absolute -bottom-32 -left-20 w-[400px] h-[400px] rounded-full bg-green-300/10 blur-3xl animate-pulse [animation-delay:2s]" />
-
-        {/* 浮动粒子 */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {[...Array(8)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-1 h-1 rounded-full bg-white/30 animate-[float_20s_ease-in-out_infinite]"
-              style={{
-                top: `${10 + i * 11}%`,
-                left: `${8 + i * 12}%`,
-                animationDelay: `${i * -2.5}s`,
-                animationDuration: `${16 + i * 2}s`,
-              }}
-            />
-          ))}
-        </div>
-
-        {/* 装饰角标 */}
-        <div className="absolute top-8 left-8 flex items-center gap-2 text-white/60 text-xs font-mono tracking-widest">
-          <div className="w-8 h-px bg-white/40" />
-          <span>FARM · GHG · 2026</span>
-        </div>
-        <div className="absolute bottom-8 right-8 flex items-center gap-2 text-white/60 text-xs font-mono tracking-widest">
-          <span>GB/T 32151.22-2024</span>
-          <div className="w-8 h-px bg-white/40" />
-        </div>
-
-        {/* 主内容 */}
-        <div className="relative z-10 text-center px-12 max-w-2xl">
-          {/* 装饰小标 */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 mb-8">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
-            <span className="text-xs font-medium text-white/90 tracking-wide">CARBON ACCOUNTING PLATFORM</span>
-          </div>
-
-          {/* 主标题 */}
-          <h1 className="text-5xl xl:text-6xl font-bold text-white leading-[1.15] tracking-tight mb-6 drop-shadow-2xl">
-            养殖场温室气体<br />
-            <span className="bg-gradient-to-r from-emerald-200 via-green-100 to-white bg-clip-text text-transparent">
-              碳核算平台
-            </span>
-          </h1>
-
-          {/* 描述 */}
-          <p className="text-base xl:text-lg text-white/85 leading-relaxed max-w-md mx-auto font-light">
-            为畜禽养殖企业提供专业、精准的<br />碳排放核算与管理服务
-          </p>
-
-          {/* 分割线 */}
-          <div className="flex items-center justify-center gap-3 my-8">
-            <div className="w-12 h-px bg-white/30" />
-            <div className="w-1 h-1 rounded-full bg-white/50" />
-            <div className="w-12 h-px bg-white/30" />
-          </div>
-
-          {/* 功能标签 */}
-          <div className="flex flex-wrap justify-center gap-2.5">
-            {features.map((f) => (
-              <FeaturePill key={f} text={f} />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ══ 右侧登录表单 ══ */}
-      <div className="w-full lg:w-[520px] flex flex-col items-center justify-center px-6 sm:px-12 bg-white relative">
-        {/* 背景渐变 */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_20%_0%,rgba(34,197,94,0.04)_0%,transparent_50%),radial-gradient(ellipse_at_80%_100%,rgba(16,185,129,0.03)_0%,transparent_50%)] pointer-events-none" />
-
-        <div className="w-full max-w-sm relative z-10">
-          {/* 品牌 Logo */}
-          <div className="flex items-center gap-2.5 mb-10">
-            <div className="relative w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-green-500/25">
-              <Image
-                src="/logo.png"
-                alt="logo"
-                fill
-                sizes="40px"
-                className="object-cover"
-              />
-            </div>
-            <span className="text-base font-bold text-green-700 tracking-tight">养殖场碳核算平台</span>
-          </div>
-
-          {/* 移动端简短说明 */}
-          <div className="lg:hidden mb-6 text-xs text-gray-400">
-            为畜禽养殖企业提供专业、精准的碳排放核算与管理服务
-          </div>
-
-          <h2 className="text-2xl font-bold text-gray-900 tracking-tight mb-1">欢迎回来</h2>
-          <p className="text-sm text-gray-400 mb-8">请输入您的账号信息登录平台</p>
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* 邮箱 */}
-            <div>
-              <label className="block text-[13px] font-semibold text-gray-600 mb-1.5 tracking-wide">
-                邮箱地址
-              </label>
-              <div className="relative group">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-green-500 transition-colors">
-                  <MailIcon />
-                </div>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your@email.com"
-                  required
-                  className="w-full pl-11 pr-4 py-3 rounded-xl border-[1.5px] border-gray-200 bg-gray-50 text-sm text-gray-800 placeholder:text-gray-300 outline-none focus:border-green-400 focus:ring-[3px] focus:ring-green-500/10 focus:bg-white transition-all"
-                />
+          <div className="relative flex h-full flex-col justify-between px-10 py-10 xl:px-14 xl:py-12">
+            <div className="flex items-center justify-between">
+              <BrandMark />
+              <div className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium tracking-[0.18em] text-white/80 backdrop-blur-sm">
+                GB/T 32151.22-2024
               </div>
             </div>
 
-            {/* 密码 */}
-            <div>
-              <label className="block text-[13px] font-semibold text-gray-600 mb-1.5 tracking-wide">
-                密码
-              </label>
-              <div className="relative group">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-green-500 transition-colors">
-                  <LockIcon />
+            <div className="max-w-xl">
+              <div className="mb-5 inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white/80 backdrop-blur-sm">
+                养殖场温室气体排放核算平台
+              </div>
+
+              <h1 className="text-4xl font-bold leading-tight text-white xl:text-5xl">
+                面向养殖场景的
+                <br />
+                温室气体核算工作台
+              </h1>
+
+              <p className="mt-5 max-w-lg text-sm leading-7 text-white/78 xl:text-[15px]">
+                支持养殖活动数据、肠道发酵 CH₄、粪污管理 CH₄/N₂O、能源与电力热力等模块的统一录入、核算、可视化和报告输出。
+              </p>
+
+              <div className="mt-8 flex flex-wrap gap-2.5">
+                {features.map((item) => (
+                  <FeaturePill key={item} text={item} />
+                ))}
+              </div>
+            </div>
+
+            <div className="grid max-w-xl grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
+                <div className="text-xs font-medium tracking-wider text-white/70">应用特点</div>
+                <div className="mt-2 text-sm leading-6 text-white">
+                  多项目管理、自动保存、结果汇总、报告导出
                 </div>
-                <input
-                  type={showPw ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="请输入密码"
-                  required
-                  className="w-full pl-11 pr-11 py-3 rounded-xl border-[1.5px] border-gray-200 bg-gray-50 text-sm text-gray-800 placeholder:text-gray-300 outline-none focus:border-green-400 focus:ring-[3px] focus:ring-green-500/10 focus:bg-white transition-all"
-                />
+              </div>
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
+                <div className="text-xs font-medium tracking-wider text-white/70">登录方式</div>
+                <div className="mt-2 text-sm leading-6 text-white">
+                  用户名登录
+                  <br />
+                  邀请码注册
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="flex items-center justify-center px-6 py-10 sm:px-8 lg:px-10">
+          <div className="w-full max-w-md">
+            <div className="mb-8 flex items-center gap-3 lg:hidden">
+              <BrandMark />
+              <div>
+                <div className="text-sm font-semibold text-green-700">养殖场碳核算平台</div>
+                <div className="text-xs text-slate-400">GB/T 32151.22-2024</div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-[0_20px_60px_rgba(15,23,42,0.08)] sm:p-8">
+              <div className="mb-6">
+                <div className="text-sm font-medium text-green-700">欢迎回来</div>
+                <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+                  登录平台
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  请输入用户名和密码登录。若为历史账号，也可暂时输入原邮箱登录。
+                </p>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-slate-700">
+                    用户名
+                  </span>
+                  <div className="relative">
+                    <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                      <UserIcon />
+                    </div>
+                    <input
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="请输入用户名"
+                      autoComplete="username"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-green-400 focus:bg-white focus:ring-4 focus:ring-green-500/10"
+                      required
+                    />
+                  </div>
+                  <span className="mt-1.5 block text-xs leading-5 text-slate-400">
+                    历史账号如尚未切换，也可输入原邮箱登录。
+                  </span>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-slate-700">
+                    密码
+                  </span>
+                  <div className="relative">
+                    <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                      <LockIcon />
+                    </div>
+                    <input
+                      type={showPw ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="请输入密码"
+                      autoComplete="current-password"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-11 text-sm text-slate-900 outline-none transition focus:border-green-400 focus:bg-white focus:ring-4 focus:ring-green-500/10"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPw((prev) => !prev)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600"
+                      aria-label={showPw ? "隐藏密码" : "显示密码"}
+                    >
+                      {showPw ? <EyeOffIcon /> : <EyeIcon />}
+                    </button>
+                  </div>
+                </label>
+
+                {error ? (
+                  <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                    {error}
+                  </div>
+                ) : null}
+
                 <button
-                  type="button"
-                  onClick={() => setShowPw(!showPw)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 transition-colors"
-                  aria-label={showPw ? "隐藏密码" : "显示密码"}
+                  type="submit"
+                  disabled={loading}
+                  className="w-full rounded-2xl bg-green-700 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {showPw ? <EyeOffIcon /> : <EyeIcon />}
+                  {loading ? "登录中..." : "登 录"}
                 </button>
+              </form>
+
+              <div className="my-6 flex items-center gap-3">
+                <div className="h-px flex-1 bg-slate-200" />
+                <span className="text-xs text-slate-400">或</span>
+                <div className="h-px flex-1 bg-slate-200" />
+              </div>
+
+              <div className="text-center text-sm text-slate-500">
+                还没有账号？{" "}
+                <Link
+                  href="/register"
+                  className="font-medium text-green-700 transition hover:text-green-800"
+                >
+                  使用邀请码注册
+                </Link>
               </div>
             </div>
-
-            {/* 错误提示 */}
-            {error && (
-              <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-4 h-4 flex-shrink-0">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="15" y1="9" x2="9" y2="15" />
-                  <line x1="9" y1="9" x2="15" y2="15" />
-                </svg>
-                {error}
-              </div>
-            )}
-
-            {/* 登录按钮 */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 text-white text-sm font-semibold shadow-lg shadow-green-600/25 hover:shadow-green-600/35 hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-green-600/25 relative overflow-hidden group/btn"
-            >
-              <span className="relative z-10">{loading ? "登录中..." : "登 录"}</span>
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700" />
-            </button>
-          </form>
-
-          {/* 分割线 */}
-          <div className="flex items-center gap-4 my-6">
-            <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-xs text-gray-300">或</span>
-            <div className="flex-1 h-px bg-gray-200" />
           </div>
-
-          {/* 注册链接 */}
-          <p className="text-center text-sm text-gray-400">
-            还没有账号？{" "}
-            <Link href="/register" className="text-green-600 font-semibold hover:text-green-700 hover:underline transition-colors">
-              使用邀请码注册
-            </Link>
-          </p>
-        </div>
-
-        <p className="absolute bottom-5 text-[11px] text-gray-300">
-          <a
-            href="https://beian.miit.gov.cn/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-gray-200 transition-colors"
-          >
-            京ICP备2026017960号-1
-          </a>
-        </p>
+        </section>
       </div>
-
-      <style jsx global>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0) translateX(0); opacity: 0.3; }
-          50% { transform: translateY(-100px) translateX(30px); opacity: 0.7; }
-        }
-      `}</style>
     </main>
   );
 }
